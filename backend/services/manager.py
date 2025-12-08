@@ -1,0 +1,18 @@
+from flask import Blueprint
+from .base_service import ABCService
+from types import ModuleType
+
+bp = Blueprint("services", __name__)
+
+from ..manager import Manager, ModuleLoadError
+
+def _check(m: ModuleType):
+	if not hasattr(m, 'setup'):
+		raise ModuleLoadError("Setup function is required for service modules")
+	instance = getattr(m, 'setup')(manager)
+	if not isinstance(instance, ABCService):
+		raise ModuleLoadError("Setup function must return a valid ABCService")
+	return instance
+
+
+manager = Manager[ABCService](__name__, checker=_check)

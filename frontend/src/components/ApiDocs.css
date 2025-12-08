@@ -1,0 +1,244 @@
+.api-docs {
+  min-height: 100vh;
+  background: #fafafa;
+}
+
+.api-docs-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.api-docs-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.api-docs-header p {
+  margin: 0.5rem 0 0 0;
+  opacity: 0.9;
+}
+
+.api-docs-content {
+  display: flex;
+  height: calc(100vh - 120px);
+}
+
+.api-sidebar {
+  width: 300px;
+  background: white;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.api-sidebar h2, .api-sidebar h3 {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  color: #666;
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.api-sidebar h3 {
+  margin-top: 2rem;
+}
+
+.api-list, .endpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.api-item, .endpoint-item {
+  padding: 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+  border: 1px solid #e0e0e0;
+  color: #1f2937;
+}
+
+.api-item:hover, .endpoint-item:hover {
+  background: #f3f4f6;
+  border-color: #667eea;
+  transform: translateX(2px);
+}
+
+.api-item.active, .endpoint-item.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.api-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.api-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: inherit;
+}
+
+.api-blueprint {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-family: 'Courier New', monospace;
+}
+
+.endpoint-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.endpoint-name {
+  font-weight: 500;
+  font-family: 'Courier New', monospace;
+  font-size: 0.875rem;
+}
+
+.endpoint-desc {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.api-main {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.endpoint-detail {
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.endpoint-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.endpoint-header h2 {
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 1.5rem;
+  color: #1f2937;
+}
+
+.http-method {
+  background: #10b981;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.endpoint-description,
+.endpoint-docstring,
+.endpoint-test {
+  margin-bottom: 2rem;
+}
+
+.endpoint-description h3,
+.endpoint-docstring h3,
+.endpoint-test h3 {
+  color: #374151;
+  font-size: 1rem;
+  margin: 0 0 0.75rem 0;
+  font-weight: 600;
+}
+
+.endpoint-description p {
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.endpoint-docstring pre {
+  background: #f3f4f6;
+  padding: 1rem;
+  border-radius: 6px;
+  color: #374151;
+  overflow-x: auto;
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.test-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.test-button {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+}
+
+.test-button:hover:not(:disabled) {
+  background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.test-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.test-response {
+  background: #1f2937;
+  color: #10b981;
+  padding: 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.test-response h4 {
+  color: #9ca3af;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: 0.05em;
+}
+
+.test-response pre {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  font-family: 'Courier New', monospace;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 1.125rem;
+}
