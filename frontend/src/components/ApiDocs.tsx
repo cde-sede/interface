@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import './ApiDocs.css';
 
 interface ApiModule {
@@ -31,13 +31,17 @@ export default function ApiDocs() {
 	const [apis, setApis] = useState<ApiModule[]>([]);
 	const [selectedApi, setSelectedApi] = useState<string | null>(null);
 	const [endpoints, setEndpoints] = useState<EndpointDoc[]>([]);
-	const [selectedEndpoint, setSelectedEndpoint] = useState<string | null>(null);
-	const [endpointDetail, setEndpointDetail] = useState<EndpointDoc | null>(null);
-	const [testResponse, setTestResponse] = useState<string>('');
-	const [loading, setLoading] = useState(false);
+	const [endpointDetails, setEndpointDetails] = useState<EndpointDoc[]>([]);
+	const [activeEndpoint, setActiveEndpoint] = useState<string | null>(null);
+	const [testResponse, setTestResponse] = useState<Record<string, string>>({});
+	const [loading, setLoading] = useState<Record<string, boolean>>({});
 	const [loadingEndpoints, setLoadingEndpoints] = useState(false);
-	const [loadingDetail, setLoadingDetail] = useState(false);
-	const [paramValues, setParamValues] = useState<Record<string, string>>({});
+	const [paramValues, setParamValues] = useState<Record<string, Record<string, string>>>({});
+
+	// Refs for scroll-spy
+	const endpointRefs = useRef<Record<string, HTMLDivElement | null>>({});
+	const mainRef = useRef<HTMLDivElement | null>(null);
+	const responseRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
 	// Fetch all APIs
 	useEffect(() => {
@@ -47,12 +51,14 @@ export default function ApiDocs() {
 			.catch(err => console.error('Failed to fetch APIs:', err));
 	}, []);
 
-	// Fetch endpoints for selected API
+	// Fetch endpoints for selected API and load all details
 	useEffect(() => {
 		if (!selectedApi) return;
 
 		setLoadingEndpoints(true);
 		setEndpoints([]);
+		setEndpointDetails([]);
+		setActiveEndpoint(null);
 
 		// Construct describe URL (selectedApi already has the base path)
 		fetch(`http://localhost:5000${selectedApi}/describe`)
@@ -62,49 +68,139 @@ export default function ApiDocs() {
 			})
 			.then(data => {
 				console.log('Fetched endpoints:', data);
-				setEndpoints(data.functions || []);
+				const endpointList = data.functions || [];
+				setEndpoints(endpointList);
+
+				// Fetch details for all endpoints
+				return Promise.all(
+					endpointList.map((endpoint: EndpointDoc) =>
+						fetch(`http://localhost:5000${selectedApi}/describe?f=${endpoint.function}`)
+							.then(res => res.json())
+							.catch(err => {
+								console.error(`Failed to fetch details for ${endpoint.function}:`, err);
+								return null;
+							})
+					)
+				);
+			})
+			.then(details => {
+				const validDetails = details.filter(d => d !== null);
+				console.log('Fetched all endpoint details:', validDetails);
+				setEndpointDetails(validDetails);
+				// Set first endpoint as active
+				if (validDetails.length > 0) {
+					setActiveEndpoint(validDetails[0].function);
+				}
 			})
 			.catch(err => console.error('Failed to fetch endpoints:', err))
 			.finally(() => setLoadingEndpoints(false));
 	}, [selectedApi]);
 
-	// Fetch endpoint details
+	// Scroll-spy: Intersection Observer to track visible endpoints
 	useEffect(() => {
-		if (!selectedApi || !selectedEndpoint) return;
+		if (!mainRef.current || endpointDetails.length === 0) return;
 
-		setLoadingDetail(true);
-		setEndpointDetail(null);
+		const observer = new IntersectionObserver(
+			(entries) => {
+				// Find the entry with the highest intersection ratio
+				const visibleEntry = entries
+					.filter(entry => entry.isIntersecting)
+					.sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
 
-		fetch(`http://localhost:5000${selectedApi}/describe?f=${selectedEndpoint}`)
-			.then(res => {
-				if (!res.ok) throw new Error(`HTTP ${res.status}`);
-				return res.json();
-			})
-			.then(data => {
-				console.log('Fetched endpoint detail:', data);
-				setEndpointDetail(data);
-			})
-			.catch(err => console.error('Failed to fetch endpoint details:', err))
-			.finally(() => setLoadingDetail(false));
-	}, [selectedApi, selectedEndpoint]);
+				if (visibleEntry) {
+					const endpointName = visibleEntry.target.getAttribute('data-endpoint');
+					if (endpointName) {
+						setActiveEndpoint(endpointName);
+					}
+				}
+			},
+			{
+				root: mainRef.current,
+				rootMargin: '-20% 0px -70% 0px',
+				threshold: [0, 0.25, 0.5, 0.75, 1]
+			}
+		);
 
-	const testEndpoint = async (route: string, method: string, params?: Record<string, ParamDef>) => {
-		setLoading(true);
-		setTestResponse('');
+		// Observe all endpoint sections
+		Object.values(endpointRefs.current).forEach(ref => {
+			if (ref) observer.observe(ref);
+		});
+
+		return () => observer.disconnect();
+	}, [endpointDetails]);
+
+	// Scroll to endpoint when sidebar item is clicked
+	const scrollToEndpoint = (endpointName: string) => {
+		const element = endpointRefs.current[endpointName];
+		if (element && mainRef.current) {
+			element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	};
+
+	// Smart scroll for response after execute
+	const scrollToResponse = (endpointName: string) => {
+		// Use setTimeout to ensure the DOM has updated with the response
+		setTimeout(() => {
+			const responseElement = responseRefs.current[endpointName];
+			const mainElement = mainRef.current;
+
+			if (!responseElement || !mainElement) return;
+
+			const MARGIN_TOP = 0; // pixels of space above response
+			const MARGIN_BOTTOM = 0; // pixels of space below response
+
+			const responseRect = responseElement.getBoundingClientRect();
+			const mainRect = mainElement.getBoundingClientRect();
+			const viewportHeight = mainRect.height;
+			const responseHeight = responseRect.height;
+
+			// Available height considering margins
+			const availableHeight = viewportHeight - MARGIN_TOP - MARGIN_BOTTOM;
+
+			// If response is bigger than available viewport (with margins), scroll to top with margin
+			if (responseHeight > availableHeight) {
+				const elementTop = responseElement.offsetTop;
+				const targetScroll = elementTop - MARGIN_TOP;
+
+				mainElement.scrollTo({ top: targetScroll, behavior: 'smooth' });
+			} else {
+				// If response is smaller, check if bottom is visible with margin
+				const responseBottom = responseRect.bottom;
+				const mainBottom = mainRect.bottom;
+
+				// If bottom is not visible (accounting for bottom margin), scroll to show it
+				if (responseBottom > mainBottom - MARGIN_BOTTOM) {
+					const elementTop = responseElement.offsetTop;
+					const elementBottom = elementTop + responseHeight;
+					const targetScroll = elementBottom - viewportHeight + MARGIN_BOTTOM;
+
+					mainElement.scrollTo({ top: targetScroll, behavior: 'smooth' });
+				}
+			}
+		}, 100);
+	};
+
+	const testEndpoint = async (endpointName: string, route: string, method: string, params?: Record<string, ParamDef>) => {
+		setLoading(prev => ({ ...prev, [endpointName]: true }));
+		// Don't clear the response immediately to avoid flicker - keep old response while loading
 
 		try {
 			let url = `http://localhost:5000${route}`;
 			let body: any = undefined;
 			const queryParams: Record<string, string> = {};
 
+			// Get param values for this specific endpoint
+			const endpointParams = paramValues[endpointName] || {};
+
 			// Process parameters
 			if (params) {
 				for (const [key, def] of Object.entries(params)) {
-					const value = paramValues[key];
+					const value = endpointParams[key];
 
 					if (def.required && !value) {
-						setTestResponse(`Error: Required parameter "${key}" is missing`);
-						setLoading(false);
+						setTestResponse(prev => ({ ...prev, [endpointName]: `Error: Required parameter "${key}" is missing` }));
+						setLoading(prev => ({ ...prev, [endpointName]: false }));
+						scrollToResponse(endpointName);
 						return;
 					}
 
@@ -140,11 +236,13 @@ export default function ApiDocs() {
 
 			const res = await fetch(url, options);
 			const data = await res.json();
-			setTestResponse(JSON.stringify(data, null, 2));
+			setTestResponse(prev => ({ ...prev, [endpointName]: JSON.stringify(data, null, 2) }));
+			scrollToResponse(endpointName);
 		} catch (err) {
-			setTestResponse(`Error: ${err}`);
+			setTestResponse(prev => ({ ...prev, [endpointName]: `Error: ${err}` }));
+			scrollToResponse(endpointName);
 		} finally {
-			setLoading(false);
+			setLoading(prev => ({ ...prev, [endpointName]: false }));
 		}
 	};
 
@@ -177,9 +275,8 @@ export default function ApiDocs() {
 											onClick={() => {
 												console.log(`Clicked API: ${api.name}, baseRoute: ${baseRoute}`);
 												setSelectedApi(baseRoute);
-												setSelectedEndpoint(null);
-												setEndpointDetail(null);
-												setTestResponse('');
+												setActiveEndpoint(null);
+												setTestResponse({});
 											}}
 										>
 											<span className="api-name">{api.name}</span>
@@ -203,8 +300,8 @@ export default function ApiDocs() {
 									{endpoints.map(endpoint => (
 										<div
 											key={endpoint.function}
-											className={`endpoint-item ${selectedEndpoint === endpoint.function ? 'active' : ''}`}
-											onClick={() => setSelectedEndpoint(endpoint.function)}
+											className={`endpoint-item ${activeEndpoint === endpoint.function ? 'active' : ''}`}
+											onClick={() => scrollToEndpoint(endpoint.function)}
 										>
 											<span className="endpoint-name">{endpoint.function}</span>
 											<span className="endpoint-desc">{endpoint.description}</span>
@@ -216,93 +313,118 @@ export default function ApiDocs() {
 					</div>
 				</aside>
 
-				<main className="api-main">
-					{loadingDetail ? (
+				<main className="api-main" ref={mainRef}>
+					{loadingEndpoints ? (
 						<div className="empty-state">
 							<p>Loading endpoint details...</p>
 						</div>
-					) : selectedApi && selectedEndpoint && endpointDetail ? (
-							<div className="endpoint-detail">
-								<div className="endpoint-header">
-									<h2>{endpointDetail.function}</h2>
-									<span className={`http-method method-${endpointDetail.method?.toLowerCase() || 'get'}`}>
-										{endpointDetail.method || 'GET'}
-									</span>
-								</div>
-
-								<div className="endpoint-description">
-									<h3>Description</h3>
-									<p>{endpointDetail.description}</p>
-								</div>
-
-								{endpointDetail.docstring && (
-									<div className="endpoint-docstring">
-										<h3>Details</h3>
-										<pre>{endpointDetail.docstring}</pre>
+					) : selectedApi && endpointDetails.length > 0 ? (
+						<div className="endpoints-container">
+							{endpointDetails.map((endpointDetail) => (
+								<div
+									key={endpointDetail.function}
+									className="endpoint-detail"
+									ref={(el) => {
+										endpointRefs.current[endpointDetail.function] = el;
+									}}
+									data-endpoint={endpointDetail.function}
+								>
+									<div className="endpoint-header">
+										<h2>{endpointDetail.function}</h2>
+										<span className={`http-method method-${endpointDetail.method?.toLowerCase() || 'get'}`}>
+											{endpointDetail.method || 'GET'}
+										</span>
 									</div>
-								)}
 
-								{endpointDetail.params && Object.keys(endpointDetail.params).length > 0 && (
-									<div className="endpoint-params">
-										<h3>Parameters</h3>
-										<div className="params-list">
-											{Object.entries(endpointDetail.params).map(([key, param]) => (
-												<div key={key} className="param-item">
-													<div className="param-header">
-														<span className="param-name">{key}</span>
-														<span className={`param-badge badge-${param.in}`}>{param.in}</span>
-														{param.required && <span className="param-required">required</span>}
-														<span className="param-type">{param.type}</span>
+									<div className="endpoint-description">
+										<h3>Description</h3>
+										<p>{endpointDetail.description}</p>
+									</div>
+
+									{endpointDetail.docstring && (
+										<div className="endpoint-docstring">
+											<h3>Details</h3>
+											<pre>{endpointDetail.docstring}</pre>
+										</div>
+									)}
+
+									{endpointDetail.params && Object.keys(endpointDetail.params).length > 0 && (
+										<div className="endpoint-params">
+											<h3>Parameters</h3>
+											<div className="params-list">
+												{Object.entries(endpointDetail.params).map(([key, param]) => (
+													<div key={key} className="param-item">
+														<div className="param-header">
+															<span className="param-name">{key}</span>
+															<span className={`param-badge badge-${param.in}`}>{param.in}</span>
+															{param.required && <span className="param-required">required</span>}
+															<span className="param-type">{param.type}</span>
+														</div>
+														<p className="param-description">{param.description}</p>
+														<input
+															type={param.type === 'number' ? 'number' : param.type === 'boolean' ? 'checkbox' : 'text'}
+															{...(param.type === 'boolean'
+																? { checked: (paramValues[endpointDetail.function]?.[key] === 'true') }
+																: { value: paramValues[endpointDetail.function]?.[key] || '' }
+															)}
+															onChange={(e) => setParamValues(prev => ({
+																...prev,
+																[endpointDetail.function]: {
+																	...(prev[endpointDetail.function] || {}),
+																	[key]: param.type === 'boolean' ? String(e.target.checked) : e.target.value
+																}
+															}))}
+															placeholder={param.type !== 'boolean' ? `Enter ${key}` : undefined}
+															className="param-input"
+														/>
 													</div>
-													<p className="param-description">{param.description}</p>
-													<input
-														type={param.type === 'number' ? 'number' : param.type === 'boolean' ? 'checkbox' : 'text'}
-														{...(param.type === 'boolean'
-															? { checked: paramValues[key] === 'true' }
-															: { value: paramValues[key] || '' }
-														)}
-														onChange={(e) => setParamValues(prev => ({
-															...prev,
-															[key]: param.type === 'boolean' ? String(e.target.checked) : e.target.value
-														}))}
-														placeholder={param.type !== 'boolean' ? `Enter ${key}` : undefined}
-														className="param-input"
-													/>
+												))}
+											</div>
+										</div>
+									)}
+
+									<div className="endpoint-test">
+										<h3>Try it out</h3>
+										<div className="test-section">
+											<button
+												onClick={() => testEndpoint(
+													endpointDetail.function,
+													endpointDetail.route || `${selectedApi}/${endpointDetail.function}`,
+													endpointDetail.method || 'GET',
+													endpointDetail.params
+												)}
+												disabled={loading[endpointDetail.function]}
+												className="test-button"
+											>
+												{loading[endpointDetail.function] ? 'Testing...' : 'Execute'}
+											</button>
+
+											{testResponse[endpointDetail.function] && (
+												<div
+													className={`test-response ${loading[endpointDetail.function] ? 'loading' : ''}`}
+													ref={(el) => {
+														responseRefs.current[endpointDetail.function] = el;
+													}}
+												>
+													<h4>Response</h4>
+													<pre>{testResponse[endpointDetail.function]}</pre>
+													{loading[endpointDetail.function] && (
+														<div className="response-loading-overlay">
+															<span>Loading...</span>
+														</div>
+													)}
 												</div>
-											))}
+											)}
 										</div>
 									</div>
-								)}
-
-								<div className="endpoint-test">
-									<h3>Try it out</h3>
-									<div className="test-section">
-										<button
-											onClick={() => testEndpoint(
-												endpointDetail.route || `${selectedApi}/${selectedEndpoint}`,
-												endpointDetail.method || 'GET',
-												endpointDetail.params
-											)}
-											disabled={loading}
-											className="test-button"
-										>
-											{loading ? 'Testing...' : 'Execute'}
-										</button>
-
-										{testResponse && (
-											<div className="test-response">
-												<h4>Response</h4>
-												<pre>{testResponse}</pre>
-											</div>
-										)}
-									</div>
 								</div>
-							</div>
-						) : (
-								<div className="empty-state">
-									<p>Select an API module and endpoint to view documentation</p>
-								</div>
-							)}
+							))}
+						</div>
+					) : (
+						<div className="empty-state">
+							<p>Select an API module to view documentation</p>
+						</div>
+					)}
 				</main>
 			</div>
 		</div>

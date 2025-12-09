@@ -166,10 +166,24 @@
 	padding: 2rem;
 	overflow-y: auto;
 	background: #ffffff;
+	scroll-behavior: smooth;
+}
+
+.endpoints-container {
+	max-width: 900px;
+	display: flex;
+	flex-direction: column;
+	gap: 3rem;
 }
 
 .endpoint-detail {
 	max-width: 900px;
+	padding-bottom: 3rem;
+	border-bottom: 2px solid #e2e8f0;
+}
+
+.endpoint-detail:last-child {
+	border-bottom: none;
 }
 
 .endpoint-header {
@@ -295,6 +309,19 @@
 	cursor: not-allowed;
 }
 
+@keyframes slideInResponse {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+		max-height: 0;
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+		max-height: 2000px;
+	}
+}
+
 .test-response {
 	background: #0f172a;
 	color: #10b981;
@@ -302,6 +329,42 @@
 	border-radius: 6px;
 	border: 1px solid #1e293b;
 	overflow-x: auto;
+	animation: slideInResponse 0.3s ease-out forwards;
+	position: relative;
+}
+
+.test-response.loading {
+	opacity: 0.6;
+}
+
+.response-loading-overlay {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(15, 23, 42, 0.7);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+	backdrop-filter: blur(2px);
+}
+
+.response-loading-overlay span {
+	color: #10b981;
+	font-size: 0.875rem;
+	font-weight: 500;
+	animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
 }
 
 .test-response h4 {
