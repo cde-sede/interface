@@ -4,12 +4,34 @@ from functools import wraps
 from typing import Callable
 
 
-def describe(description: str) -> Callable:
+def describe(
+	description: str,
+	*,
+	params: dict[str, dict] | None = None,
+	method: str = "GET"
+) -> Callable:
 	"""
 	Decorator to add documentation to an endpoint.
 
 	Usage:
-		@describe("Returns user information")
+		@describe(
+			"Returns user information",
+			params={
+				"user_id": {
+					"type": "string",
+					"required": True,
+					"description": "The user ID",
+					"in": "path"
+				},
+				"include_posts": {
+					"type": "boolean",
+					"required": False,
+					"description": "Include user posts",
+					"in": "query"
+				}
+			},
+			method="GET"
+		)
 		def get_user(self):
 			'''Detailed docstring about the endpoint'''
 			return {"user": "data"}
@@ -22,6 +44,8 @@ def describe(description: str) -> Callable:
 		# Store metadata on the function
 		wrapper._describe_text = description  # type: ignore
 		wrapper._describe_doc = func.__doc__  # type: ignore
+		wrapper._describe_params = params or {}  # type: ignore
+		wrapper._describe_method = method  # type: ignore
 		return wrapper
 
 	return decorator
@@ -68,14 +92,18 @@ class ABCApi(ABC):
 						route = None
 						for rule in current_app.url_map.iter_rules():
 							if rule.endpoint.endswith(f'.{func_name}'):
-								route = rule.rule
+								# Convert Flask's <param> syntax to {param} for consistency
+								import re
+								route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
 								break
 
 						return {
 							"function": func_name,
 							"description": method._describe_text,
 							"docstring": method._describe_doc,
-							"route": route
+							"route": route,
+							"params": getattr(method, '_describe_params', {}),
+							"method": getattr(method, '_describe_method', 'GET')
 						}
 					else:
 						return {"error": f"Function '{func_name}' has no description"}, 404
@@ -94,14 +122,18 @@ class ABCApi(ABC):
 						route = None
 						for rule in current_app.url_map.iter_rules():
 							if rule.endpoint.endswith(f'.{attr_name}'):
-								route = rule.rule
+								# Convert Flask's <param> syntax to {param} for consistency
+								import re
+								route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
 								break
 
 						describable.append({
 							"function": attr_name,
 							"description": attr._describe_text,
 							"docstring": attr._describe_doc,
-							"route": route
+							"route": route,
+							"params": getattr(attr, '_describe_params', {}),
+							"method": getattr(attr, '_describe_method', 'GET')
 						})
 				return {"functions": describable}
 

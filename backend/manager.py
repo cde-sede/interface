@@ -1,11 +1,8 @@
 import importlib.util
 import pathlib
-import re
 import sys
 from types import ModuleType
 from collections.abc import Callable
-
-PLUGIN_PATTERN = re.compile(r"^P_(?P<name>\w+)_(?P<version>\d+)\.py$")
 
 class ModuleLoadError(Exception):
 	pass
@@ -15,6 +12,13 @@ class Manager[T]:
 
 	def __new__(cls, *args, **kwags):
 		return super().__new__(cls)
+
+	@classmethod
+	def get_manager(cls, key: str) -> 'Manager':
+		"""Get a manager instance from the registry by its key."""
+		if key not in cls.__REGISTRY:
+			raise KeyError(f"No manager registered with key '{key}'")
+		return cls.__REGISTRY[key]
 
 	def __init__(self, lookup_dir: str, *,
 			  checker: Callable[[ModuleType], T], dependencies: dict | None = None):
@@ -45,9 +49,11 @@ class Manager[T]:
 			self._caller_package = '.'.join(parts[:-1]) if len(parts) > 1 else lookup_dir
 			self.lookup_dir = pathlib.Path(self._caller_package.replace('.', '/'))
 
-		# Register using the base package name (first part)
-		self._base_package = self._caller_package.split('.')[0]
-		Manager.__REGISTRY[self._base_package] = self
+		# Register using a meaningful identifier (second part for nested packages, first part otherwise)
+		package_parts = self._caller_package.split('.')
+		self._registry_key = package_parts[1] if len(package_parts) > 1 else package_parts[0]
+		self._base_package = package_parts[0]
+		Manager.__REGISTRY[self._registry_key] = self
 
 		self._discover_modules()
 
@@ -57,18 +63,22 @@ class Manager[T]:
 
 		Examples:
 			manager.get('Example') - Get module with name='Example' from current manager
+			manager.get('plugins') - Get the plugins manager instance
 			manager.get('services.db') - Get 'db' service from services manager
 			manager.get('Example.attr') - Get attribute from module
 		"""
 		parts = path.split('.')
 
 		# Check if first part is a registered manager (cross-manager lookup)
-		if parts[0] in Manager.__REGISTRY and parts[0] != self._base_package:
-			if len(parts) < 2:
-				raise ValueError(f"Must specify module name after manager: {parts[0]}.module_name")
+		if parts[0] in Manager.__REGISTRY and parts[0] != self._registry_key:
 			target_manager = Manager.__REGISTRY[parts[0]]
-			obj = target_manager._get_by_name(parts[1])
-			remaining = parts[2:]
+			if len(parts) == 1:
+				# Return the manager itself
+				return target_manager
+			else:
+				# Get module from the target manager
+				obj = target_manager._get_by_name(parts[1])
+				remaining = parts[2:]
 		else:
 			# Local lookup by name property
 			obj = self._get_by_name(parts[0])
@@ -100,13 +110,11 @@ class Manager[T]:
 
 	def _discover_modules(self):
 		for file in self.lookup_dir.iterdir():
-			match = PLUGIN_PATTERN.match(file.name)
-			if not match:
+			# Skip files starting with underscore or not ending in .py
+			if file.name.startswith('_') or not file.name.endswith('.py'):
 				continue
 
-			module_name = match.group("name")
-			version = int(match.group("version"))
-			module_name = f"module_{module_name}_{version}"
+			module_name = file.stem  # filename without extension
 
 			spec = importlib.util.spec_from_file_location(
 				module_name, file
@@ -114,7 +122,6 @@ class Manager[T]:
 			self._modules_specs[module_name] = {
 				"spec": spec,
 				"file": file,
-				"version": version,
 			}
 
 	def load(self, name: str):
@@ -149,12 +156,12 @@ class Manager[T]:
 
 	def list_plugins(self):
 		"""List all discovered plugins by their name property (for loaded) or module name (for unloaded)."""
-		result = {}
-		for module_name, info in self._modules_specs.items():
+		result = []
+		for module_name in self._modules_specs.keys():
 			# Use the name property if loaded, otherwise use module name
 			if module_name in self._modules:
 				display_name = self._modules[module_name].name
 			else:
 				display_name = module_name
-			result[display_name] = info["version"]
+			result.append(display_name)
 		return result

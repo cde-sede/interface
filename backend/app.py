@@ -12,11 +12,23 @@ CORS(app)
 #	print(f'{plugin_name=}')
 #
 #print(manager.get('module_example_0').name)
-from .api import manager
-for api in manager.list_plugins():
-	manager.load(api)
+def load_apis():
+	from .api import manager
+	for api in manager.list_plugins(): manager.load(api)
 
-app.register_blueprint(manager.get("api").blueprint)
+	app.register_blueprint(manager.get("api").blueprint)
+
+def load_services():
+	from .services import manager
+	for service in manager.list_plugins(): manager.load(service)
+
+def load_plugins():
+	from .plugins import manager
+	for plugin in manager.list_plugins(): manager.load(plugin)
+
+load_services()
+load_plugins()
+load_apis()
 
 @app.route('/api/health', methods=['GET'])
 def health():

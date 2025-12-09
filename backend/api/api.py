@@ -2,9 +2,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
 	from _injected import *
 
-from .base_api import ABCApi, describe
-from .manager import Manager
-from flask import Blueprint
+from ._base_api import ABCApi, describe
+from ._manager import Manager
+from flask import Blueprint, current_app
 
 
 class API(ABCApi):
@@ -17,21 +17,12 @@ class API(ABCApi):
 	@describe("Lists all registered API modules and their routes")
 	def list_apis(self):
 		"""Returns a comprehensive list of all loaded API modules with their blueprints and available routes."""
-		from flask import current_app
-
-		# Debug: print all endpoints
-		print("\n=== All registered endpoints ===")
-		for rule in current_app.url_map.iter_rules():
-			print(f"  {rule.endpoint} -> {rule.rule}")
-		print("================================\n")
 
 		apis = []
 		for module in self.manager.modules:
 			# Get routes for this blueprint from the app's url_map
 			bp = module.blueprint
 			bp_name = bp.name
-
-			print(f"Checking blueprint '{bp_name}' (module: {module.name})")
 
 			# For nested blueprints, check if blueprint name appears in endpoint
 			routes = []
@@ -44,9 +35,6 @@ class API(ABCApi):
 				   endpoint_parts[0] == bp_name or \
 				   (len(endpoint_parts) > 1 and endpoint_parts[-2] == bp_name):
 					routes.append(rule.rule)
-					print(f"  Found route: {rule.endpoint} -> {rule.rule}")
-
-			print(f"  Total routes for {bp_name}: {len(routes)}")
 
 			apis.append({"name": module.name, "blueprint": bp_name, "routes": routes})
 

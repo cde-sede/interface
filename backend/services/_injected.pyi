@@ -1,6 +1,6 @@
 """Type hints for symbols injected into service module globals."""
 from typing import Any, TypeVar, Callable, overload
-from .base_service import ABCService, Manager
+from ._base_service import ABCService, Manager
 
 __all__ = ['manager', 'validate_setup']
 

@@ -1,5 +1,5 @@
 from flask import Blueprint
-from .base_api import ABCApi
+from ._base_api import ABCApi
 from types import ModuleType
 
 bp = Blueprint("api", __name__)

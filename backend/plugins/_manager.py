@@ -1,5 +1,5 @@
 from flask import Blueprint
-from .base_plugin import ABCPlugin
+from ._base_plugin import ABCPlugin
 from types import ModuleType
 import sys
 

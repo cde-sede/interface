@@ -1,5 +1,5 @@
 from flask import blueprints as bp
-from .manager import manager
+from ._manager import manager
 
 __all__ = [
 	'blueprints',

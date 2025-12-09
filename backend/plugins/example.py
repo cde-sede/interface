@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
 	from _injected import *
 
-from .base_plugin import ABCPlugin
-from .manager import Manager
+from ._base_plugin import ABCPlugin
+from ._manager import Manager
 from flask import Blueprint
 
 class Plugin(ABCPlugin):

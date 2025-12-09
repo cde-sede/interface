@@ -1,5 +1,5 @@
 from flask import Blueprint
-from .base_service import ABCService
+from ._base_service import ABCService
 from types import ModuleType
 
 bp = Blueprint("services", __name__)
