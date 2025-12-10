@@ -1,14 +1,41 @@
 from abc import ABC, abstractmethod
-from flask import Blueprint
+from flask import Blueprint, request, current_app
 from functools import wraps
-from typing import Callable
+from typing import Callable, Any, Literal
+import re
 
+
+class Metadata:
+	def __init__(self, func: Callable):
+		self._func = func
+
+	def __getattr__(self, key):
+		if key in ['_func', 'is_metadata', 'all']: return super().__getattribute__(key)
+		try:
+			return self[key]
+		except: raise AttributeError(key)
+	def __setattr__(self, key, value):
+		if key in ['_func', 'is_metadata', 'all']: return super().__setattr__(key, value)
+		try:
+			self[key] = value
+		except: raise AttributeError(key, value)
+	def __getitem__(self, key): return getattr(self._func, f"_metadata_{key}")
+	def __setitem__(self, key, value): setattr(self._func, f"_metadata_{key}", value)
+
+	def is_metadata(self, key: str):
+		return key.startswith("_metadata_") and hasattr(self._func, key)
+
+	@property
+	def all(self):
+		return {k[10:]: self[k[10:]] for k in filter(lambda x: self.is_metadata(x), dir(self._func))}
 
 def describe(
 	description: str,
+	type: Literal["route"] | Literal["specs"] = "route",
 	*,
 	params: dict[str, dict] | None = None,
-	method: str = "GET"
+	method: str = "GET",
+	documentation: str = ""
 ) -> Callable:
 	"""
 	Decorator to add documentation to an endpoint.
@@ -41,13 +68,45 @@ def describe(
 		def wrapper(*args, **kwargs):
 			return func(*args, **kwargs)
 
-		# Store metadata on the function
-		wrapper._describe_text = description  # type: ignore
-		wrapper._describe_doc = func.__doc__  # type: ignore
-		wrapper._describe_params = params or {}  # type: ignore
-		wrapper._describe_method = method  # type: ignore
-		return wrapper
+		meta = Metadata(wrapper)
+		for k, v in Metadata(func).all.items(): meta[k] = v
 
+		meta.describe_text = description
+		meta.describe_doc = func.__doc__
+		meta.describe_params = params or {}
+		meta.describe_method = method
+		meta.describe_type = type
+		meta.describe_documentation = documentation
+
+		return wrapper
+	return decorator
+
+
+def register(url: str, *args, **kwargs):
+	"""
+	Decorator to add metadata to automatically register the function as a flask view function.
+
+	Usage:
+		@register(
+			"/index",
+			method="GET"
+		)
+		def index(self):
+			return {"index": "hello"}
+	"""
+	def decorator(func: Callable) -> Callable:
+		@wraps(func)
+		def wrapper(*a, **kw):
+			return func(*a, **kw)
+
+		meta = Metadata(wrapper)
+		for k, v in Metadata(func).all.items(): meta[k] = v
+
+		meta.register_url = url
+		meta.register_args = args
+		meta.register_kwargs = kwargs
+
+		return wrapper
 	return decorator
 
 
@@ -59,6 +118,83 @@ class ABCApi(ABC):
 	@property
 	@abstractmethod
 	def blueprint(self) -> Blueprint: ...
+
+	def add_rules(self, bp: Blueprint) -> None:
+		for attr_name in dir(self):
+			if attr_name.startswith('_'):
+				continue
+			attr = getattr(self, attr_name)
+			metadata = Metadata(attr)
+			if not hasattr(metadata, 'register_url'):
+				continue
+			url = metadata.register_url
+			args = metadata.register_args
+			kwargs = metadata.register_kwargs
+
+			bp.add_url_rule(url, *args, **(kwargs | {'view_func': attr}))
+
+	def _build_describe_response(self, func_name: str | None) -> dict | tuple[dict, int]:
+		"""Build the response for the /describe endpoint."""
+		if func_name:
+			# Return description for specific function
+			if not hasattr(self, func_name):
+				return {"error": f"Function '{func_name}' not found"}, 404
+
+			method = getattr(self, func_name)
+			metadata = Metadata(method)
+
+			if not hasattr(metadata, 'describe_text'):
+				return {"error": f"Function '{func_name}' has no description"}, 404
+
+			# Find the route for this function
+			route = None
+			for rule in current_app.url_map.iter_rules():
+				if rule.endpoint.endswith(f'.{func_name}'):
+					route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
+					break
+
+			return {
+				"function": func_name,
+				"description": metadata.describe_text,
+				"docstring": metadata.describe_doc,
+				"route": route,
+				"params": getattr(metadata, 'describe_params', {}),
+				"method": getattr(metadata, 'describe_method', 'GET'),
+				"type": getattr(metadata, 'describe_type', 'route'),
+				"documentation": getattr(metadata, 'describe_documentation', '')
+			}
+		else:
+			# List all describable functions
+			describable = []
+			for attr_name in dir(self):
+				if attr_name.startswith('_'):
+					continue
+				attr = getattr(self, attr_name)
+				metadata = Metadata(attr)
+
+				if not hasattr(metadata, 'describe_text'):
+					continue
+
+				# Find the route for this function
+				route = None
+				for rule in current_app.url_map.iter_rules():
+					if rule.endpoint.endswith(f'.{attr_name}'):
+						route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
+						break
+
+				describable.append({
+					"function": attr_name,
+					"description": metadata.describe_text,
+					"docstring": metadata.describe_doc,
+					"route": route,
+					"params": getattr(metadata, 'describe_params', {}),
+					"method": getattr(metadata, 'describe_method', 'GET'),
+					"type": getattr(metadata, 'describe_type', 'route'),
+					"documentation": getattr(metadata, 'describe_documentation', ''),
+					"_index": getattr(metadata, 'index', len(describable)),
+				})
+			return {"functions": sorted(describable, key=lambda x: x['_index'])}
+
 
 	def create_blueprint(self, name: str, *args, parent: 'ABCApi | None' = None, import_name: str | None = None, **kwargs) -> Blueprint:
 		"""
@@ -80,62 +216,8 @@ class ABCApi(ABC):
 
 		# Automatically add /describe endpoint
 		def describe_endpoint():
-			from flask import request, current_app
 			func_name = request.args.get('f')
-
-			if func_name:
-				# Return description for specific function
-				if hasattr(self, func_name):
-					method = getattr(self, func_name)
-					if hasattr(method, '_describe_text'):
-						# Find the route for this function
-						route = None
-						for rule in current_app.url_map.iter_rules():
-							if rule.endpoint.endswith(f'.{func_name}'):
-								# Convert Flask's <param> syntax to {param} for consistency
-								import re
-								route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
-								break
-
-						return {
-							"function": func_name,
-							"description": method._describe_text,
-							"docstring": method._describe_doc,
-							"route": route,
-							"params": getattr(method, '_describe_params', {}),
-							"method": getattr(method, '_describe_method', 'GET')
-						}
-					else:
-						return {"error": f"Function '{func_name}' has no description"}, 404
-				else:
-					return {"error": f"Function '{func_name}' not found"}, 404
-			else:
-				# List all describable functions
-				from flask import current_app
-				describable = []
-				for attr_name in dir(self):
-					if attr_name.startswith('_'):
-						continue
-					attr = getattr(self, attr_name)
-					if hasattr(attr, '_describe_text'):
-						# Find the route for this function
-						route = None
-						for rule in current_app.url_map.iter_rules():
-							if rule.endpoint.endswith(f'.{attr_name}'):
-								# Convert Flask's <param> syntax to {param} for consistency
-								import re
-								route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
-								break
-
-						describable.append({
-							"function": attr_name,
-							"description": attr._describe_text,
-							"docstring": attr._describe_doc,
-							"route": route,
-							"params": getattr(attr, '_describe_params', {}),
-							"method": getattr(attr, '_describe_method', 'GET')
-						})
-				return {"functions": describable}
+			return self._build_describe_response(func_name)
 
 		bp.add_url_rule('/describe', 'describe', describe_endpoint)
 

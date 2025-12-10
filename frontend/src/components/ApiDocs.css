@@ -55,15 +55,54 @@
 	border-bottom: none;
 }
 
+.sidebar-section-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 0.5rem;
+	margin-bottom: 0.75rem;
+	flex-shrink: 0;
+}
+
 .sidebar-section h2, .sidebar-section h3 {
 	font-size: 0.75rem;
 	text-transform: uppercase;
 	color: #64748b;
-	margin: 0 0 0.75rem 0;
+	margin: 0;
 	font-weight: 600;
 	letter-spacing: 0.05em;
-	padding: 0 0.5rem;
 	flex-shrink: 0;
+}
+
+.sidebar-section h2 {
+	padding: 0 0.5rem;
+	margin-bottom: 0.75rem;
+}
+
+.cache-clear-button {
+	background: transparent;
+	border: none;
+	color: #64748b;
+	cursor: pointer;
+	padding: 0.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	transition: all 0.15s ease;
+}
+
+.cache-clear-button:hover {
+	background: #e2e8f0;
+	color: #0f172a;
+}
+
+.cache-clear-button:active {
+	transform: scale(0.95);
+}
+
+.cache-clear-button svg {
+	display: block;
 }
 
 .sidebar-scroll {
@@ -104,6 +143,11 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
+}
+
+.endpoint-list.loading {
+	opacity: 0.5;
+	pointer-events: none;
 }
 
 .api-item, .endpoint-item {
@@ -442,6 +486,11 @@
 .badge-body {
 	background: #e0e7ff;
 	color: #3730a3;
+}
+
+.badge-header {
+	background: #fce7f3;
+	color: #9f1239;
 }
 
 .param-required {

@@ -1,6 +1,7 @@
 """Type hints for symbols injected into API module globals."""
 from typing import Any, TypeVar, Callable, overload
-from ._base_api import ABCApi, Manager
+from ._base_api import ABCApi
+from ..manager import Manager
 
 __all__ = ['manager', 'validate_setup']
 

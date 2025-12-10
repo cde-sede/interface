@@ -1,6 +1,7 @@
 """Type hints for symbols injected into service module globals."""
 from typing import Any, TypeVar, Callable, overload
-from ._base_service import ABCService, Manager
+from ._base_service import ABCService
+from ..manager import Manager
 
 __all__ = ['manager', 'validate_setup']
 
@@ -13,3 +14,4 @@ def validate_setup(func: Callable[[Manager[ABCService]], P]) -> Callable[[Manage
 def validate_setup(func: object) -> object: ...
 
 manager: Manager[ABCService]
+require: Callable[[str], ABCService]

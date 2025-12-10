@@ -1,6 +1,7 @@
 """Type hints for symbols injected into plugin module globals."""
 from typing import Any, TypeVar, Callable, overload
-from ._base_plugin import ABCPlugin, Manager
+from ._base_plugin import ABCPlugin
+from ..manager import Manager
 
 __all__ = ['manager', 'validate_setup']
 

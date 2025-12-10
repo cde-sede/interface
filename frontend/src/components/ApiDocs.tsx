@@ -11,7 +11,7 @@ interface ParamDef {
 	type: string;
 	required: boolean;
 	description: string;
-	in: 'path' | 'query' | 'body';
+	in: 'path' | 'query' | 'body' | 'header';
 }
 
 interface EndpointDoc {
@@ -21,6 +21,9 @@ interface EndpointDoc {
 	route?: string | null;
 	params?: Record<string, ParamDef>;
 	method?: string;
+	type?: 'route' | 'specs';
+	documentation?: string;
+	_index?: number;
 }
 
 interface ApiDocsData {
@@ -43,6 +46,9 @@ export default function ApiDocs() {
 	const mainRef = useRef<HTMLDivElement | null>(null);
 	const responseRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+	// Cache for endpoint details by API route
+	const endpointCache = useRef<Record<string, { endpoints: EndpointDoc[], details: EndpointDoc[] }>>({});
+
 	// Fetch all APIs
 	useEffect(() => {
 		fetch('http://localhost:5000/api/')
@@ -51,13 +57,42 @@ export default function ApiDocs() {
 			.catch(err => console.error('Failed to fetch APIs:', err));
 	}, []);
 
+	// Clear cache function
+	const clearCache = () => {
+		endpointCache.current = {};
+		// Reload current API if one is selected
+		if (selectedApi) {
+			const currentApi = selectedApi;
+			setSelectedApi(null);
+			setTimeout(() => setSelectedApi(currentApi), 0);
+		}
+	};
+
 	// Fetch endpoints for selected API and load all details
 	useEffect(() => {
 		if (!selectedApi) return;
 
+		// Check cache first
+		const cached = endpointCache.current[selectedApi];
+		if (cached) {
+			// Instant swap with cached data
+			setEndpoints(cached.endpoints);
+			setEndpointDetails(cached.details);
+			setLoadingEndpoints(false);
+			if (cached.details.length > 0) {
+				setActiveEndpoint(cached.details[0].function);
+			}
+			return;
+		}
+
+		// No cache - grey out current and load new
 		setLoadingEndpoints(true);
-		setEndpoints([]);
-		setEndpointDetails([]);
+		// Keep old endpoints visible but greyed out
+		// Only clear if there are no endpoints (first load)
+		if (endpoints.length === 0) {
+			setEndpoints([]);
+			setEndpointDetails([]);
+		}
 		setActiveEndpoint(null);
 
 		// Construct describe URL (selectedApi already has the base path)
@@ -69,7 +104,6 @@ export default function ApiDocs() {
 			.then(data => {
 				console.log('Fetched endpoints:', data);
 				const endpointList = data.functions || [];
-				setEndpoints(endpointList);
 
 				// Fetch details for all endpoints
 				return Promise.all(
@@ -81,11 +115,20 @@ export default function ApiDocs() {
 								return null;
 							})
 					)
-				);
+				).then(details => ({ endpointList, details }));
 			})
-			.then(details => {
+			.then(({ endpointList, details }) => {
 				const validDetails = details.filter(d => d !== null);
 				console.log('Fetched all endpoint details:', validDetails);
+
+				// Store in cache
+				endpointCache.current[selectedApi] = {
+					endpoints: endpointList,
+					details: validDetails
+				};
+
+				// Update state
+				setEndpoints(endpointList);
 				setEndpointDetails(validDetails);
 				// Set first endpoint as active
 				if (validDetails.length > 0) {
@@ -188,6 +231,7 @@ export default function ApiDocs() {
 			let url = `http://localhost:5000${route}`;
 			let body: any = undefined;
 			const queryParams: Record<string, string> = {};
+			const headers: Record<string, string> = {};
 
 			// Get param values for this specific endpoint
 			const endpointParams = paramValues[endpointName] || {};
@@ -213,6 +257,8 @@ export default function ApiDocs() {
 						} else if (def.in === 'body') {
 							if (!body) body = {};
 							body[key] = value;
+						} else if (def.in === 'header') {
+							headers[key] = value;
 						}
 					}
 				}
@@ -227,10 +273,11 @@ export default function ApiDocs() {
 			// Make request
 			const options: RequestInit = {
 				method,
+				headers: { ...headers },
 			};
 
 			if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-				options.headers = { 'Content-Type': 'application/json' };
+				options.headers = { ...options.headers, 'Content-Type': 'application/json' };
 				options.body = JSON.stringify(body);
 			}
 
@@ -289,14 +336,22 @@ export default function ApiDocs() {
 					</div>
 
 					<div className="sidebar-section">
-						<h3>Endpoints</h3>
+						<div className="sidebar-section-header">
+							<h3>Sections</h3>
+							<button
+								className="cache-clear-button"
+								onClick={clearCache}
+								title="Clear cache and reload"
+								aria-label="Clear cache"
+							>
+								<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+								</svg>
+							</button>
+						</div>
 						<div className="sidebar-scroll">
-							{loadingEndpoints && (
-								<div style={{ padding: '1rem', color: '#666' }}>Loading endpoints...</div>
-							)}
-
 							{selectedApi && endpoints.length > 0 && (
-								<div className="endpoint-list">
+								<div className={`endpoint-list ${loadingEndpoints ? 'loading' : ''}`}>
 									{endpoints.map(endpoint => (
 										<div
 											key={endpoint.function}
@@ -314,7 +369,7 @@ export default function ApiDocs() {
 				</aside>
 
 				<main className="api-main" ref={mainRef}>
-					{loadingEndpoints ? (
+					{loadingEndpoints && endpointDetails.length === 0 ? (
 						<div className="empty-state">
 							<p>Loading endpoint details...</p>
 						</div>
@@ -345,6 +400,13 @@ export default function ApiDocs() {
 										<div className="endpoint-docstring">
 											<h3>Details</h3>
 											<pre>{endpointDetail.docstring}</pre>
+										</div>
+									)}
+
+									{endpointDetail.documentation && (
+										<div className="endpoint-documentation">
+											<h3>Documentation</h3>
+											<div>{endpointDetail.documentation}</div>
 										</div>
 									)}
 
@@ -383,40 +445,42 @@ export default function ApiDocs() {
 										</div>
 									)}
 
-									<div className="endpoint-test">
-										<h3>Try it out</h3>
-										<div className="test-section">
-											<button
-												onClick={() => testEndpoint(
-													endpointDetail.function,
-													endpointDetail.route || `${selectedApi}/${endpointDetail.function}`,
-													endpointDetail.method || 'GET',
-													endpointDetail.params
-												)}
-												disabled={loading[endpointDetail.function]}
-												className="test-button"
-											>
-												{loading[endpointDetail.function] ? 'Testing...' : 'Execute'}
-											</button>
-
-											{testResponse[endpointDetail.function] && (
-												<div
-													className={`test-response ${loading[endpointDetail.function] ? 'loading' : ''}`}
-													ref={(el) => {
-														responseRefs.current[endpointDetail.function] = el;
-													}}
-												>
-													<h4>Response</h4>
-													<pre>{testResponse[endpointDetail.function]}</pre>
-													{loading[endpointDetail.function] && (
-														<div className="response-loading-overlay">
-															<span>Loading...</span>
-														</div>
+									{(!endpointDetail.type || endpointDetail.type === 'route') && (
+										<div className="endpoint-test">
+											<h3>Try it out</h3>
+											<div className="test-section">
+												<button
+													onClick={() => testEndpoint(
+														endpointDetail.function,
+														endpointDetail.route || `${selectedApi}/${endpointDetail.function}`,
+														endpointDetail.method || 'GET',
+														endpointDetail.params
 													)}
-												</div>
-											)}
+													disabled={loading[endpointDetail.function]}
+													className="test-button"
+												>
+													{loading[endpointDetail.function] ? 'Testing...' : 'Execute'}
+												</button>
+
+												{testResponse[endpointDetail.function] && (
+													<div
+														className={`test-response ${loading[endpointDetail.function] ? 'loading' : ''}`}
+														ref={(el) => {
+															responseRefs.current[endpointDetail.function] = el;
+														}}
+													>
+														<h4>Response</h4>
+														<pre>{testResponse[endpointDetail.function]}</pre>
+														{loading[endpointDetail.function] && (
+															<div className="response-loading-overlay">
+																<span>Loading...</span>
+															</div>
+														)}
+													</div>
+												)}
+											</div>
 										</div>
-									</div>
+									)}
 								</div>
 							))}
 						</div>

@@ -141,7 +141,7 @@ class Manager[T]:
 		module.__dict__.update({
 			'manager': self,
 			'require': self._require,
-			"inject": self._dependencies
+			'inject': self._dependencies
 		})
 
 		try:
