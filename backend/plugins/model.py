@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 from collections.abc import Callable
 from ._base_plugin import ABCPlugin
 from ._manager import Manager
-from .models import ABCModel, File
+from .models import ABCModel, File, Task
 
 class Plugin(ABCPlugin):
 	def __init__(self, manager: Manager[ABCPlugin]):
@@ -18,7 +18,11 @@ class Plugin(ABCPlugin):
 
 	@property
 	def files(self) -> File:
-		return cast(File, self._models['files'])
+		return cast(File, self._models['models.files'])
+
+	@property
+	def tasks(self) -> Task:
+		return cast(Task, self._models['models.tasks'])
 
 	@property
 	def name(self) -> str:

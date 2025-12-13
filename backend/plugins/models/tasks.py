@@ -1,0 +1,242 @@
+"""
+Task model for background task execution system.
+"""
+from typing import TYPE_CHECKING
+import time
+
+if TYPE_CHECKING:
+	from backend.manager import Manager
+	from backend.plugins import ABCPlugin
+
+from backend.plugins.models._model import ABCModel
+
+
+class Task(ABCModel):
+	"""
+	Task model for persisting background task state.
+
+	Stores task metadata, parameters, results, and execution status
+	in SQLite database for durability across server restarts.
+	"""
+
+	class TaskStatus:
+		"""Task status constants"""
+		PENDING = "pending"
+		RUNNING = "running"
+		COMPLETED = "completed"
+		FAILED = "failed"
+		TIMEOUT = "timeout"
+
+
+	class TaskPriority:
+		"""Task priority levels"""
+		LOW = -10
+		NORMAL = 0
+		HIGH = 10
+		CRITICAL = 100
+
+
+	@property
+	def name(self) -> str:
+		return "tasks"
+
+	def ensure(self) -> None:
+		"""Create tasks table and indexes if they don't exist"""
+		with self.db() as db:
+			db.execute("""
+				CREATE TABLE IF NOT EXISTS tasks (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					name TEXT NOT NULL,
+					status TEXT NOT NULL,
+					priority INTEGER NOT NULL DEFAULT 0,
+					timeout REAL,
+					params TEXT,
+					result TEXT,
+					error TEXT,
+					traceback TEXT,
+					created_at REAL NOT NULL,
+					started_at REAL,
+					completed_at REAL,
+					worker_id TEXT
+				)
+			""")
+
+			# Create indexes for performance
+			db.execute("""
+				CREATE INDEX IF NOT EXISTS idx_tasks_status
+				ON tasks(status)
+			""")
+
+			db.execute("""
+				CREATE INDEX IF NOT EXISTS idx_tasks_priority
+				ON tasks(priority DESC, created_at ASC)
+			""")
+
+	def create(self, name: str, params: dict | None = None, priority: int = 0, timeout: float | None = None) -> int:
+		"""
+		Insert new task record.
+
+		Args:
+			name: Task function name
+			params: Task parameters (will be JSON serialized)
+			priority: Task priority (higher = more important)
+			timeout: Max execution time in seconds (None = no timeout)
+
+		Returns:
+			task_id: Database ID of created task
+		"""
+		import json
+
+		params_json = json.dumps(params) if params else None
+		created_at = time.time()
+
+		with self.db() as db:
+			cursor = db.execute("""
+				INSERT INTO tasks (name, status, priority, timeout, params, created_at)
+				VALUES (?, ?, ?, ?, ?, ?)
+			""", (name, Task.TaskStatus.PENDING, priority, timeout, params_json, created_at))
+
+			assert cursor.lastrowid is not None
+			return cursor.lastrowid
+
+	def update(self, task_id: int, **kwargs) -> None:
+		"""
+		Update task fields.
+
+		Args:
+			task_id: Task ID to update
+			**kwargs: Fields to update (status, result, error, traceback, started_at, completed_at, worker_id)
+		"""
+		if not kwargs:
+			return
+
+		# Build SET clause dynamically
+		set_parts = []
+		values = []
+
+		for key, value in kwargs.items():
+			if key in ('status', 'result', 'error', 'traceback', 'started_at', 'completed_at', 'worker_id', 'priority', 'timeout'):
+				set_parts.append(f"{key} = ?")
+				values.append(value)
+
+		if not set_parts:
+			return
+
+		values.append(task_id)
+		query = f"UPDATE tasks SET {', '.join(set_parts)} WHERE id = ?"
+
+		with self.db() as db:
+			db.execute(query, tuple(values))
+
+	def get(self, task_id: int) -> dict | None:
+		"""
+		Retrieve task by ID.
+
+		Args:
+			task_id: Task ID
+
+		Returns:
+			Task record as dict or None if not found
+		"""
+		with self.db() as db:
+			cursor = db.execute("""
+				SELECT id, name, status, priority, timeout, params, result,
+					   error, traceback, created_at, started_at, completed_at, worker_id
+				FROM tasks
+				WHERE id = ?
+			""", (task_id,))
+
+			row = cursor.fetchone()
+			if not row:
+				return None
+
+			return {
+				'id': row[0],
+				'name': row[1],
+				'status': row[2],
+				'priority': row[3],
+				'timeout': row[4],
+				'params': row[5],
+				'result': row[6],
+				'error': row[7],
+				'traceback': row[8],
+				'created_at': row[9],
+				'started_at': row[10],
+				'completed_at': row[11],
+				'worker_id': row[12]
+			}
+
+	def get_by_status(self, status: str) -> list[dict]:
+		"""
+		Get all tasks with given status.
+
+		Args:
+			status: Task status to filter by
+
+		Returns:
+			List of task records
+		"""
+		with self.db() as db:
+			cursor = db.execute("""
+				SELECT id, name, status, priority, timeout, params, result,
+					   error, traceback, created_at, started_at, completed_at, worker_id
+				FROM tasks
+				WHERE status = ?
+				ORDER BY priority DESC, created_at ASC
+			""", (status,))
+
+			rows = cursor.fetchall()
+			return [
+				{
+					'id': row[0],
+					'name': row[1],
+					'status': row[2],
+					'priority': row[3],
+					'timeout': row[4],
+					'params': row[5],
+					'result': row[6],
+					'error': row[7],
+					'traceback': row[8],
+					'created_at': row[9],
+					'started_at': row[10],
+					'completed_at': row[11],
+					'worker_id': row[12]
+				}
+				for row in rows
+			]
+
+	def delete(self, task_id: int) -> None:
+		"""
+		Delete task record.
+
+		Args:
+			task_id: Task ID to delete
+		"""
+		with self.db() as db:
+			db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+	def cleanup(self, older_than_days: int = 7) -> int:
+		"""
+		Delete old completed/failed/timeout tasks.
+
+		Args:
+			older_than_days: Delete tasks older than this many days
+
+		Returns:
+			Number of tasks deleted
+		"""
+		cutoff = time.time() - (older_than_days * 24 * 60 * 60)
+
+		with self.db() as db:
+			cursor = db.execute("""
+				DELETE FROM tasks
+				WHERE status IN (?, ?, ?)
+				AND completed_at < ?
+			""", (Task.TaskStatus.COMPLETED, Task.TaskStatus.FAILED, Task.TaskStatus.TIMEOUT, cutoff))
+
+			return cursor.rowcount
+
+
+def setup(manager: 'Manager[ABCPlugin]', /):
+	"""Setup function for model registration"""
+	return Task(manager)

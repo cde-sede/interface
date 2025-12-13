@@ -146,6 +146,38 @@ SETTINGS_DEFINITIONS = [
 		examples=[None, "your_password_here"],
 		type_name="string"
 	),
+	SettingDefinition(
+		key="task_worker_count",
+		default=5,
+		description="Number of concurrent task worker threads",
+		examples=[1, 5, 10],
+		type_name="integer"
+	),
+	SettingDefinition(
+		key="task_cleanup_days",
+		default=7,
+		description="Days to keep completed/failed tasks before cleanup",
+		examples=[1, 7, 30],
+		type_name="integer"
+	),
+	SettingDefinition(
+		key="task_workers_enabled",
+		default=False,
+		description="Whether to enable task workers in this process (important for WSGI environments)",
+		valid_values=[True, False],
+		options={
+			"true": "Enable workers in this process (use for dedicated task worker or development)",
+			"false": "Disable workers (recommended for WSGI worker processes)"
+		},
+		type_name="boolean"
+	),
+	SettingDefinition(
+		key="task_worker_lock_file",
+		default="/tmp/task_worker.lock",
+		description="Path to lock file for preventing multiple worker processes",
+		examples=["/tmp/task_worker.lock", "/var/run/app/task_worker.lock"],
+		type_name="string"
+	),
 ]
 
 # Create a lookup dict for quick access
@@ -193,6 +225,22 @@ class Service(ABCService):
 	@property
 	def redis_password(self) -> str | None:
 		return _SETTINGS_BY_KEY["redis_password"].get_value(self.r[str])
+
+	@property
+	def task_worker_count(self) -> int:
+		return _SETTINGS_BY_KEY["task_worker_count"].get_value(self.r[int])
+
+	@property
+	def task_cleanup_days(self) -> int:
+		return _SETTINGS_BY_KEY["task_cleanup_days"].get_value(self.r[int])
+
+	@property
+	def task_workers_enabled(self) -> bool:
+		return _SETTINGS_BY_KEY["task_workers_enabled"].get_value(self.r[bool])
+
+	@property
+	def task_worker_lock_file(self) -> str:
+		return _SETTINGS_BY_KEY["task_worker_lock_file"].get_value(self.r[str])
 
 	@staticmethod
 	def get_default_settings() -> dict:

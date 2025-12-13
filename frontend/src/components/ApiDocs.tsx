@@ -276,6 +276,35 @@ export default function ApiDocs() {
 		}, 100);
 	};
 
+	// Cast parameter value to its proper type
+	const castParamValue = (value: string, type: string): any => {
+		if (!value && value !== '0' && value !== 'false') return value;
+
+		const lowerType = type.toLowerCase();
+
+		if (lowerType === 'number' || lowerType === 'integer' || lowerType === 'int' || lowerType === 'float') {
+			const num = Number(value);
+			return isNaN(num) ? value : num;
+		}
+
+		if (lowerType === 'boolean' || lowerType === 'bool') {
+			if (value === 'true') return true;
+			if (value === 'false') return false;
+			return Boolean(value);
+		}
+
+		if (lowerType === 'array' || lowerType === 'object' || lowerType === 'json') {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return value;
+			}
+		}
+
+		// Default: return as string
+		return value;
+	};
+
 	const testEndpoint = async (endpointName: string, route: string, method: string, params?: Record<string, ParamDef>) => {
 		setLoading(prev => ({ ...prev, [endpointName]: true }));
 		// Don't clear the response immediately to avoid flicker - keep old response while loading
@@ -302,16 +331,22 @@ export default function ApiDocs() {
 					}
 
 					if (value) {
+						// Cast the value to its proper type
+						const castedValue = castParamValue(value, def.type);
+
 						if (def.in === 'path') {
-							// Replace path parameter
-							url = url.replace(`{${key}}`, encodeURIComponent(value));
+							// Replace path parameter (keep as string for URL)
+							url = url.replace(`{${key}}`, encodeURIComponent(String(castedValue)));
 						} else if (def.in === 'query') {
-							queryParams[key] = value;
+							// Query params need to be strings for URLSearchParams
+							queryParams[key] = String(castedValue);
 						} else if (def.in === 'body') {
 							if (!body) body = {};
-							body[key] = value;
+							// Body params can be any type
+							body[key] = castedValue;
 						} else if (def.in === 'header') {
-							headers[key] = value;
+							// Headers should be strings
+							headers[key] = String(castedValue);
 						}
 					}
 				}

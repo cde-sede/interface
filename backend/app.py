@@ -2,6 +2,7 @@ from flask import Flask, jsonify, send_from_directory, abort
 from flask_cors import CORS
 from pathlib import Path
 import os
+import atexit
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
@@ -36,6 +37,26 @@ def load_plugins():
 load_services()
 load_plugins()
 load_apis()
+
+# Register task worker shutdown handler
+def shutdown_task_workers():
+	"""Gracefully shutdown task workers on app exit"""
+	try:
+		from .services import manager
+		tasks = manager.get("tasks")
+		if tasks and tasks.workers_enabled:
+			tasks._stop_workers()
+	except:
+		pass  # Ignore errors during shutdown
+
+atexit.register(shutdown_task_workers)
+
+@app.teardown_appcontext
+def teardown_workers(exception=None):
+	"""Flask teardown handler for task workers"""
+	# Only stop workers if this is the final teardown
+	# In WSGI environments, teardown happens per-request, so we skip it
+	pass
 
 
 @app.route('/api/health', methods=['GET'])

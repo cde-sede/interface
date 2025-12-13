@@ -307,8 +307,11 @@ class Manager[T]:
 		module.__dict__.update({
 			'manager': self,
 			'require': self._require,
-			'inject': self._dependencies
+			'inject':  self._dependencies,
 		})
+		module.manager = self               # pyright: ignore
+		module.require = self._require      # pyright: ignore
+		module.inject  = self._dependencies # pyright: ignore
 
 		try:
 			assert spec.loader is not None

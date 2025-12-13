@@ -7,12 +7,21 @@ from collections.abc import Callable
 from ._base_plugin import ABCPlugin
 from ._manager import Manager
 from .models import ABCModel, File
+from ..services.tasks import Service as Tasks
 import requests
-
 
 class Downloader(ABCPlugin):
 	def __init__(self, manager: Manager[ABCPlugin]):
 		self.manager = manager
+
+		tasks = manager.get[Tasks]("services.tasks")
+
+		@tasks.register(name="download", timeout=30.0)
+		def download(url):
+			import time
+			print("Task start")
+			time.sleep(5)
+			print("Task end")
 
 	@property
 	def name(self) -> str:
