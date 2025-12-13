@@ -12,15 +12,22 @@ CORS(app)
 #	print(f'{plugin_name=}')
 #
 #print(manager.get('module_example_0').name)
+
 def load_apis():
-	from .api import manager
+	from .api import manager, ABCApi
 	for api in manager.list_plugins(): manager.load(api)
 
-	app.register_blueprint(manager.get("api").blueprint)
+	root = manager.get("api")
+	assert isinstance(root, ABCApi)
+
+	app.register_blueprint(root.blueprint)
 
 def load_services():
 	from .services import manager
 	for service in manager.list_plugins(): manager.load(service)
+
+	manager.get("prometheus").initialize(app)
+	manager.get("metrics").initialize(app)
 
 def load_plugins():
 	from .plugins import manager
@@ -29,6 +36,7 @@ def load_plugins():
 load_services()
 load_plugins()
 load_apis()
+
 
 @app.route('/api/health', methods=['GET'])
 def health():

@@ -8,7 +8,7 @@ from ..manager import Manager, ModuleLoadError
 
 def _check(m: ModuleType):
 	if not hasattr(m, 'setup'):
-		raise ModuleLoadError("Setup function is required for API modules")
+		raise ModuleLoadError("Setup function is required for API modules", m)
 	instance = getattr(m, 'setup')(manager)
 	if not isinstance(instance, ABCApi):
 		raise ModuleLoadError("Setup function must return a valid ABCApi")

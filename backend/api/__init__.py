@@ -1,9 +1,7 @@
-from flask import blueprints as bp
 from ._manager import manager
+from ._base_api import ABCApi
 
 __all__ = [
-	'blueprints'
+	'manager',
+	'ABCApi',
 ]
-
-def blueprints() -> list[bp.Blueprint]:
-	return []

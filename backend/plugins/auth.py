@@ -1,6 +1,6 @@
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Optional, cast, Callable, Any
 if TYPE_CHECKING:
-	from _injected import manager, validate_setup
+	from _injected import validate_setup
 
 from ._base_plugin import ABCPlugin
 from ._manager import Manager
@@ -9,9 +9,40 @@ import bcrypt
 import jwt
 import datetime
 import secrets
+from functools import wraps
+from flask import request, jsonify, abort
 
 from ..services.db import Service as DB
 from ..services.settings import Service as Settings
+
+class AuthUtils:
+	manager: Manager
+	def require_auth(self, *args: Any, **kwargs: Any) -> bool:
+		"""
+		Condition function that checks if the current request is authenticated.
+		Calls abort(401) if authentication fails.
+
+		Usage:
+			@cond(auth.require_auth)
+			def protected_route():
+				return jsonify({'message': 'Protected content'})
+
+		Aborts with 401 if token is missing or invalid.
+		Returns True if authenticated.
+		"""
+		assert hasattr(self, 'manager') and isinstance(self.manager, Manager)
+
+		auth = self.manager.get[Plugin]('plugins.auth')
+
+		token = auth._get_token_from_request()
+		if not token:
+			abort(401, description='Missing authentication token')
+
+		user_data = auth.verify_token(token)
+		if not user_data:
+			abort(401, description='Invalid or expired token')
+
+		return True
 
 
 class Plugin(ABCPlugin):
@@ -71,8 +102,8 @@ class Plugin(ABCPlugin):
 
 	def __init__(self, manager: Manager[ABCPlugin]):
 		self.manager = manager
-		self.db: DB = cast(DB, manager.get('services.db'))
-		self.settings: Settings = cast(Settings, manager.get('services.settings'))
+		self.db = manager.get[DB]('services.db')
+		self.settings = manager.get[Settings]('services.settings')
 
 		# Get JWT secret from settings or generate one
 		self.jwt_secret = self.settings.r.jwt_secret or secrets.token_hex(32)
@@ -266,6 +297,19 @@ class Plugin(ABCPlugin):
 			)
 			for user in users
 		]
+
+	def _get_token_from_request(self) -> str | None:
+		"""Extract JWT token from request Authorization header."""
+		auth_header = request.headers.get('Authorization')
+		if not auth_header:
+			return None
+
+		# Expected format: "Bearer <token>"
+		parts = auth_header.split()
+		if len(parts) != 2 or parts[0].lower() != 'bearer':
+			return None
+
+		return parts[1]
 
 	def generate_token(self, user_id: int, username: str, email: str) -> str:
 		"""Generate JWT token for user."""

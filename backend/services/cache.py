@@ -6,22 +6,24 @@ from ._base_service import ABCService
 from ._manager import Manager
 from .settings import Service as Settings
 import redis
+from redis import Redis
 import json
 
 
 class Service(ABCService):
 	def __init__(self, manager: Manager[ABCService]):
 		self.manager = manager
-		self.settings: Settings = cast(Settings, self.manager.get('settings'))
+		self.settings = self.manager.get[Settings]('settings')
 
-		# Get Redis connection details from settings or use defaults
-		redis_host = self.settings.r.redis_host or "localhost"
-		redis_port = self.settings.r.redis_port or 6379
-		redis_db = self.settings.r.redis_db or 0
-		redis_password = self.settings.r.redis_password or None
+		# Get Redis connection details from settings
+		# Settings now provide defaults via SettingDefinition
+		redis_host = self.settings.redis_host
+		redis_port = self.settings.redis_port
+		redis_db = self.settings.redis_db
+		redis_password = self.settings.redis_password
 
-		# Initialize Redis connection
-		self._redis = redis.Redis(
+		# Initialize Redis connection (synchronous client)
+		self._redis: Redis = redis.Redis(
 			host=redis_host,
 			port=redis_port,
 			db=redis_db,
@@ -36,7 +38,7 @@ class Service(ABCService):
 	def _check_connection(self) -> bool:
 		"""Check if Redis connection is available."""
 		try:
-			self._redis.ping()
+			cast(bool, self._redis.ping())
 			return True
 		except (redis.ConnectionError, redis.TimeoutError):
 			return False
@@ -55,7 +57,7 @@ class Service(ABCService):
 			return default
 
 		try:
-			value = self._redis.get(key)
+			value = cast(str, self._redis.get(key))
 			if value is None:
 				return default
 
@@ -88,9 +90,9 @@ class Service(ABCService):
 				value = json.dumps(value)
 
 			if ttl:
-				return self._redis.setex(key, ttl, value)
+				return cast(bool, self._redis.setex(key, ttl, value))
 			else:
-				return self._redis.set(key, value)
+				return cast(bool, self._redis.set(key, value))
 		except Exception:
 			return False
 
@@ -105,7 +107,7 @@ class Service(ABCService):
 			return 0
 
 		try:
-			return self._redis.delete(*keys)
+			return cast(int, self._redis.delete(*keys))
 		except Exception:
 			return 0
 
@@ -120,7 +122,7 @@ class Service(ABCService):
 			return 0
 
 		try:
-			return self._redis.exists(*keys)
+			return cast(int, self._redis.exists(*keys))
 		except Exception:
 			return 0
 
@@ -139,7 +141,7 @@ class Service(ABCService):
 			return False
 
 		try:
-			return self._redis.expire(key, ttl)
+			return cast(bool, self._redis.expire(key, ttl))
 		except Exception:
 			return False
 
@@ -159,7 +161,7 @@ class Service(ABCService):
 		try:
 			keys = list(self._redis.scan_iter(pattern))
 			if keys:
-				return self._redis.delete(*keys)
+				return cast(int, self._redis.delete(*keys))
 			return 0
 		except Exception:
 			return 0
@@ -175,7 +177,7 @@ class Service(ABCService):
 			return None
 
 		try:
-			return self._redis.incrby(key, amount)
+			return cast(int, self._redis.incrby(key, amount))
 		except Exception:
 			return None
 
@@ -190,7 +192,7 @@ class Service(ABCService):
 			return None
 
 		try:
-			return self._redis.decrby(key, amount)
+			return cast(int, self._redis.decrby(key, amount))
 		except Exception:
 			return None
 

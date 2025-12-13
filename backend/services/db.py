@@ -29,8 +29,8 @@ class Service(ABCService):
 	def __init__(self, manager: Manager[ABCService]):
 		self.manager = manager
 
-		self.settings: Settings = cast(Settings, self.manager.get('settings'))
-		self.migrations: Migrations = cast(Migrations, self.manager.get('migrations'))
+		self.settings = self.manager.get[Settings]('settings')
+		self.migrations = self.manager.get[Migrations]('migrations')
 
 	def __call__(self):
 		return _DB(self.settings.db)
@@ -42,12 +42,6 @@ class Service(ABCService):
 	@property
 	def ready(self) -> bool:
 		return True
-
-#	def query(self, sql: str):
-#		connection = self.connection
-#		data = connection.execute(sql).fetchall()
-#		connection.commit()
-#		return data
 
 def setup(manager: Manager[ABCService], /):
 	require("settings")

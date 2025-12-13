@@ -13,7 +13,7 @@ class AuthAPI(ABCApi):
 		self.manager = manager
 		self.parent = parent
 		self.bp = self.create_blueprint("auth", parent=parent, url_prefix="/auth")
-		self.auth: AuthPlugin = cast(AuthPlugin, self.manager.get('plugins.auth'))
+		self.auth = self.manager.get[AuthPlugin]('plugins.auth')
 
 		self.add_rules(self.bp)
 

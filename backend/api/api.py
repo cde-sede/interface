@@ -20,23 +20,38 @@ class API(ABCApi):
 
 		apis = []
 		for module in self.manager.modules:
-			# Get routes for this blueprint from the app's url_map
 			bp = module.blueprint
 			bp_name = bp.name
 
-			# For nested blueprints, check if blueprint name appears in endpoint
+			endpoint_prefix_parts = [bp_name]
+			current = module
+			while hasattr(current, '_parent_api') and current._parent_api is not None:
+				current = current._parent_api
+				endpoint_prefix_parts.insert(0, current.blueprint.name)
+
+			endpoint_prefix = '.'.join(endpoint_prefix_parts)
+
 			routes = []
 			for rule in current_app.url_map.iter_rules():
-				endpoint_parts = rule.endpoint.split('.')
-				# Check if this endpoint belongs to this blueprint
-				# For direct blueprints: "api." or first part is "api"
-				# For nested blueprints: "api.v1." or second part is "v1"
-				if rule.endpoint.startswith(f"{bp_name}.") or \
-				   endpoint_parts[0] == bp_name or \
-				   (len(endpoint_parts) > 1 and endpoint_parts[-2] == bp_name):
-					routes.append(rule.rule)
+				if rule.endpoint.startswith(f"{endpoint_prefix}."):
+					endpoint_suffix = rule.endpoint[len(endpoint_prefix) + 1:]
+					if '.' not in endpoint_suffix:
+						routes.append({
+							"name": endpoint_suffix,
+							"url": rule.rule
+						})
 
-			apis.append({"name": module.name, "blueprint": bp_name, "routes": routes})
+			parent_name = None
+			if hasattr(module, '_parent_api') and module._parent_api is not None:
+				parent_name = module._parent_api.blueprint.name
+
+			apis.append({
+				"name": module.name,
+				"blueprint": bp_name,
+				"parent": parent_name,
+				"url_prefix": bp.url_prefix,
+				"routes": routes
+			})
 
 		return {"apis": apis}
 

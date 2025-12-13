@@ -13,7 +13,7 @@ class V1API(ABCApi):
 		self.manager = manager
 		self.base = base
 		self.bp = self.create_blueprint("v1", parent=base, url_prefix="/v1")
-		self.db: DB = cast(DB, self.manager.get('services.db'))
+		self.db = self.manager.get[DB]('services.db')
 
 		self.add_rules(self.bp)
 

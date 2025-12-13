@@ -11,6 +11,96 @@
 	text-rendering: optimizeLegibility;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
+
+	/* Theme CSS Variables - Default theme values (will be overridden by ThemeContext) */
+	/* Header */
+	--theme-header-bg: #0f172a;
+	--theme-header-text: #ffffff;
+	--theme-header-text-muted: rgba(255, 255, 255, 0.7);
+	--theme-header-border: #1e293b;
+
+	/* Sidebar */
+	--theme-sidebar-bg: #f8fafc;
+	--theme-sidebar-border: #e2e8f0;
+	--theme-sidebar-heading: #64748b;
+	--theme-sidebar-item-text: #475569;
+	--theme-sidebar-item-text-hover: #0f172a;
+	--theme-sidebar-item-bg-hover: #e2e8f0;
+	--theme-sidebar-item-bg-active: #0f172a;
+	--theme-sidebar-item-text-active: #ffffff;
+
+	/* Main content */
+	--theme-main-bg: #ffffff;
+	--theme-main-text: #0f172a;
+	--theme-main-text-muted: #475569;
+	--theme-main-border: #e2e8f0;
+
+	/* Cards */
+	--theme-card-bg: #f8fafc;
+	--theme-card-border: #e2e8f0;
+	--theme-card-border-hover: #cbd5e1;
+
+	/* Buttons */
+	--theme-button-primary-bg: #0f172a;
+	--theme-button-primary-text: #ffffff;
+	--theme-button-primary-bg-hover: #1e293b;
+	--theme-button-primary-bg-active: #334155;
+
+	/* Inputs */
+	--theme-input-bg: #ffffff;
+	--theme-input-border: #cbd5e1;
+	--theme-input-border-hover: #94a3b8;
+	--theme-input-border-focus: #0f172a;
+	--theme-input-text: #0f172a;
+	--theme-input-focus-ring: rgba(15, 23, 42, 0.05);
+	--theme-input-accent: #0f172a;
+
+	/* HTTP Method badges */
+	--theme-method-get-bg: #dcfce7;
+	--theme-method-get-text: #166534;
+	--theme-method-post-bg: #dbeafe;
+	--theme-method-post-text: #1e40af;
+	--theme-method-put-bg: #fef3c7;
+	--theme-method-put-text: #92400e;
+	--theme-method-patch-bg: #e9d5ff;
+	--theme-method-patch-text: #6b21a8;
+	--theme-method-delete-bg: #fee2e2;
+	--theme-method-delete-text: #991b1b;
+
+	/* Parameter badges */
+	--theme-badge-path-bg: #dbeafe;
+	--theme-badge-path-text: #1e40af;
+	--theme-badge-query-bg: #fef3c7;
+	--theme-badge-query-text: #92400e;
+	--theme-badge-body-bg: #e0e7ff;
+	--theme-badge-body-text: #3730a3;
+	--theme-badge-header-bg: #fce7f3;
+	--theme-badge-header-text: #9f1239;
+
+	/* Terminal/Response */
+	--theme-terminal-bg: #0f172a;
+	--theme-terminal-text: #10b981;
+	--theme-terminal-border: #1e293b;
+	--theme-terminal-heading: #94a3b8;
+	--theme-terminal-overlay-bg: rgba(15, 23, 42, 0.7);
+
+	/* Scrollbar */
+	--theme-scrollbar-thumb: #cbd5e1;
+	--theme-scrollbar-thumb-hover: #94a3b8;
+
+	/* Code blocks */
+	--theme-code-bg: #f8fafc;
+	--theme-code-text: #334155;
+	--theme-code-border: #e2e8f0;
+
+	/* States */
+	--theme-required-text: #dc2626;
+	--theme-empty-state-text: #94a3b8;
+}
+
+/* Smooth transitions for theme changes */
+* {
+	transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 a {

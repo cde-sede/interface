@@ -78,6 +78,19 @@ def setup():
     return MyModuleInstance()
 ```
 
+
+### Loading order
+
+In the backend application, by default, each manager loads every module in discovery order. This behavior may be machine dependant as it relies on pathlib.Path.iterdir which may have inconsistent sorting.
+
+The application loads managers in reverse depth order:
+1. Services
+2. Plugins
+3. APIs
+
+Discover ordering may be bypassed using `require`, which is injected inside every loaded module, in the setup function.
+But require is unable to interface with another plugin type, as it is manager bound.
+
 ### Accessing Modules
 
 ```python

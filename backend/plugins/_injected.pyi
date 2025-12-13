@@ -13,3 +13,4 @@ def validate_setup(func: Callable[[Manager[ABCPlugin]], P]) -> Callable[[Manager
 def validate_setup(func: object) -> object: ...
 
 manager: Manager[ABCPlugin]
+require: Callable[[str], ABCPlugin]

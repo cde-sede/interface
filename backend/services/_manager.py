@@ -8,7 +8,7 @@ from ..manager import Manager, ModuleLoadError
 
 def _check(m: ModuleType):
 	if not hasattr(m, 'setup'):
-		raise ModuleLoadError("Setup function is required for service modules")
+		raise ModuleLoadError("Setup function is required for service modules", m)
 	instance = getattr(m, 'setup')(manager)
 	if not isinstance(instance, ABCService):
 		raise ModuleLoadError("Setup function must return a valid ABCService")

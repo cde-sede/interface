@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from flask import Blueprint, request, current_app
+from flask import Blueprint, request, current_app, abort
 from functools import wraps
 from typing import Callable, Any, Literal
 import re
@@ -28,6 +28,19 @@ class Metadata:
 	@property
 	def all(self):
 		return {k[10:]: self[k[10:]] for k in filter(lambda x: self.is_metadata(x), dir(self._func))}
+
+def cond(functor: Callable):
+	def decorator(func):
+		def wrapper(*args, **kwargs):
+			if functor(*args, **kwargs):
+				return func(*args, **kwargs)
+			abort(500)
+
+		meta = Metadata(wrapper)
+		for k, v in Metadata(func).all.items(): meta[k] = v
+
+		return wrapper
+	return decorator
 
 def describe(
 	description: str,
@@ -146,11 +159,20 @@ class ABCApi(ABC):
 			if not hasattr(metadata, 'describe_text'):
 				return {"error": f"Function '{func_name}' has no description"}, 404
 
-			# Find the route for this function
+			# Build full endpoint path by walking up parent chain
+			endpoint_parts = [self.blueprint.name, func_name]
+			current = self
+			while hasattr(current, '_parent_api') and current._parent_api is not None:
+				current = current._parent_api
+				endpoint_parts.insert(0, current.blueprint.name)
+
+			expected_endpoint = '.'.join(endpoint_parts)
+
+			# Find route with exact endpoint match
 			route = None
 			for rule in current_app.url_map.iter_rules():
-				if rule.endpoint.endswith(f'.{func_name}'):
-					route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
+				if rule.endpoint == expected_endpoint:
+					route = re.sub(r'<(?:\w+:)?(\w+)>', r'{\1}', rule.rule)
 					break
 
 			return {
@@ -175,11 +197,20 @@ class ABCApi(ABC):
 				if not hasattr(metadata, 'describe_text'):
 					continue
 
-				# Find the route for this function
+				# Build full endpoint path by walking up parent chain
+				endpoint_parts = [self.blueprint.name, attr_name]
+				current = self
+				while hasattr(current, '_parent_api') and current._parent_api is not None:
+					current = current._parent_api
+					endpoint_parts.insert(0, current.blueprint.name)
+
+				expected_endpoint = '.'.join(endpoint_parts)
+
+				# Find route with exact endpoint match
 				route = None
 				for rule in current_app.url_map.iter_rules():
-					if rule.endpoint.endswith(f'.{attr_name}'):
-						route = re.sub(r'<(\w+)>', r'{\1}', rule.rule)
+					if rule.endpoint == expected_endpoint:
+						route = re.sub(r'<(?:\w+:)?(\w+)>', r'{\1}', rule.rule)
 						break
 
 				describable.append({
@@ -210,6 +241,9 @@ class ABCApi(ABC):
 		Returns:
 			The created Blueprint instance
 		"""
+		# Store parent reference for endpoint path resolution
+		self._parent_api = parent
+
 		if import_name is None:
 			import_name = self.__class__.__module__
 		bp = Blueprint(name, import_name, *args, **kwargs)

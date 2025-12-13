@@ -1,10 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import './ApiDocs.css';
+import { ThemePicker } from './ThemePicker';
+
+interface RouteInfo {
+	name: string;
+	url: string;
+}
 
 interface ApiModule {
 	name: string;
 	blueprint: string;
-	routes: string[];
+	parent: string | null;
+	url_prefix: string;
+	routes: RouteInfo[];
 }
 
 interface ParamDef {
@@ -32,7 +40,7 @@ interface ApiDocsData {
 
 export default function ApiDocs() {
 	const [apis, setApis] = useState<ApiModule[]>([]);
-	const [selectedApi, setSelectedApi] = useState<string | null>(null);
+	const [selectedApiName, setSelectedApiName] = useState<string | null>(null);
 	const [endpoints, setEndpoints] = useState<EndpointDoc[]>([]);
 	const [endpointDetails, setEndpointDetails] = useState<EndpointDoc[]>([]);
 	const [activeEndpoint, setActiveEndpoint] = useState<string | null>(null);
@@ -46,13 +54,32 @@ export default function ApiDocs() {
 	const mainRef = useRef<HTMLDivElement | null>(null);
 	const responseRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-	// Cache for endpoint details by API route
+	// Cache for endpoint details by API name
 	const endpointCache = useRef<Record<string, { endpoints: EndpointDoc[], details: EndpointDoc[] }>>({});
+
+	// Build base path recursively
+	const buildBasePath = (apiName: string, apisMap: Map<string, ApiModule>): string => {
+		const api = apisMap.get(apiName);
+		if (!api) return '';
+
+		const parentBase = api.parent ? buildBasePath(api.parent, apisMap) : '';
+		return parentBase + api.url_prefix;
+	};
 
 	// Fetch all APIs
 	useEffect(() => {
 		fetch('http://localhost:5000/api/')
-			.then(res => res.json())
+			.then(async res => {
+				if (!res.ok) {
+					const text = await res.text();
+					throw new Error(`HTTP ${res.status}: ${text}`);
+				}
+				try {
+					return await res.json();
+				} catch (e) {
+					throw new Error(`Invalid JSON response: ${e}`);
+				}
+			})
 			.then((data: ApiDocsData) => setApis(data.apis))
 			.catch(err => console.error('Failed to fetch APIs:', err));
 	}, []);
@@ -61,19 +88,19 @@ export default function ApiDocs() {
 	const clearCache = () => {
 		endpointCache.current = {};
 		// Reload current API if one is selected
-		if (selectedApi) {
-			const currentApi = selectedApi;
-			setSelectedApi(null);
-			setTimeout(() => setSelectedApi(currentApi), 0);
+		if (selectedApiName) {
+			const currentApi = selectedApiName;
+			setSelectedApiName(null);
+			setTimeout(() => setSelectedApiName(currentApi), 0);
 		}
 	};
 
 	// Fetch endpoints for selected API and load all details
 	useEffect(() => {
-		if (!selectedApi) return;
+		if (!selectedApiName) return;
 
 		// Check cache first
-		const cached = endpointCache.current[selectedApi];
+		const cached = endpointCache.current[selectedApiName];
 		if (cached) {
 			// Instant swap with cached data
 			setEndpoints(cached.endpoints);
@@ -95,11 +122,22 @@ export default function ApiDocs() {
 		}
 		setActiveEndpoint(null);
 
-		// Construct describe URL (selectedApi already has the base path)
-		fetch(`http://localhost:5000${selectedApi}/describe`)
-			.then(res => {
-				if (!res.ok) throw new Error(`HTTP ${res.status}`);
-				return res.json();
+		// Build base path for the selected API
+		const apisMap = new Map(apis.map(api => [api.name, api]));
+		const basePath = buildBasePath(selectedApiName, apisMap);
+
+		// Fetch list of endpoints
+		fetch(`http://localhost:5000${basePath}/describe`)
+			.then(async res => {
+				if (!res.ok) {
+					const text = await res.text();
+					throw new Error(`HTTP ${res.status}: ${text}`);
+				}
+				try {
+					return await res.json();
+				} catch (e) {
+					throw new Error(`Invalid JSON response: ${e}`);
+				}
 			})
 			.then(data => {
 				console.log('Fetched endpoints:', data);
@@ -108,8 +146,19 @@ export default function ApiDocs() {
 				// Fetch details for all endpoints
 				return Promise.all(
 					endpointList.map((endpoint: EndpointDoc) =>
-						fetch(`http://localhost:5000${selectedApi}/describe?f=${endpoint.function}`)
-							.then(res => res.json())
+						fetch(`http://localhost:5000${basePath}/describe?f=${encodeURIComponent(endpoint.function)}`)
+							.then(async res => {
+								if (!res.ok) {
+									console.error(`HTTP ${res.status} for ${endpoint.function}`);
+									return null;
+								}
+								try {
+									return await res.json();
+								} catch (e) {
+									console.error(`Invalid JSON for ${endpoint.function}:`, e);
+									return null;
+								}
+							})
 							.catch(err => {
 								console.error(`Failed to fetch details for ${endpoint.function}:`, err);
 								return null;
@@ -122,7 +171,7 @@ export default function ApiDocs() {
 				console.log('Fetched all endpoint details:', validDetails);
 
 				// Store in cache
-				endpointCache.current[selectedApi] = {
+				endpointCache.current[selectedApiName] = {
 					endpoints: endpointList,
 					details: validDetails
 				};
@@ -135,9 +184,13 @@ export default function ApiDocs() {
 					setActiveEndpoint(validDetails[0].function);
 				}
 			})
-			.catch(err => console.error('Failed to fetch endpoints:', err))
+			.catch(err => {
+				console.error('Failed to fetch endpoints:', err);
+				setEndpoints([]);
+				setEndpointDetails([]);
+			})
 			.finally(() => setLoadingEndpoints(false));
-	}, [selectedApi]);
+	}, [selectedApiName, apis]);
 
 	// Scroll-spy: Intersection Observer to track visible endpoints
 	useEffect(() => {
@@ -282,7 +335,23 @@ export default function ApiDocs() {
 			}
 
 			const res = await fetch(url, options);
-			const data = await res.json();
+			const responseText = await res.text();
+
+			if (!res.ok) {
+				setTestResponse(prev => ({ ...prev, [endpointName]: `HTTP ${res.status} Error:\n${responseText}` }));
+				scrollToResponse(endpointName);
+				return;
+			}
+
+			let data;
+			try {
+				data = JSON.parse(responseText);
+			} catch (e) {
+				setTestResponse(prev => ({ ...prev, [endpointName]: `Invalid JSON response:\n${responseText}` }));
+				scrollToResponse(endpointName);
+				return;
+			}
+
 			setTestResponse(prev => ({ ...prev, [endpointName]: JSON.stringify(data, null, 2) }));
 			scrollToResponse(endpointName);
 		} catch (err) {
@@ -296,8 +365,13 @@ export default function ApiDocs() {
 	return (
 		<div className="api-docs">
 			<header className="api-docs-header">
-				<h1>API Documentation</h1>
-				<p>Interactive API testing and documentation</p>
+				<div className="header-content">
+					<div className="header-text">
+						<h1>API Documentation</h1>
+						<p>Interactive API testing and documentation</p>
+					</div>
+					<ThemePicker />
+				</div>
 			</header>
 
 			<div className="api-docs-content">
@@ -306,31 +380,21 @@ export default function ApiDocs() {
 						<h2>API Modules</h2>
 						<div className="sidebar-scroll">
 							<div className="api-list">
-								{apis.map(api => {
-									// Find the base route (not /describe, not with query params)
-									const baseRoute = api.routes
-										.filter(r => !r.includes('describe'))
-										.sort((a, b) => a.length - b.length)[0]
-										?.replace(/\/$/, '') || '';
-
-									console.log(`API ${api.name}:`, { routes: api.routes, baseRoute });
-
-									return (
-										<div
-											key={api.blueprint}
-											className={`api-item ${selectedApi === baseRoute ? 'active' : ''}`}
-											onClick={() => {
-												console.log(`Clicked API: ${api.name}, baseRoute: ${baseRoute}`);
-												setSelectedApi(baseRoute);
-												setActiveEndpoint(null);
-												setTestResponse({});
-											}}
-										>
-											<span className="api-name">{api.name}</span>
-											<span className="api-blueprint">{api.blueprint}</span>
-										</div>
-									);
-								})}
+								{apis.filter(api => api.name !== 'api').map(api => (
+									<div
+										key={api.blueprint}
+										className={`api-item ${selectedApiName === api.name ? 'active' : ''}`}
+										onClick={() => {
+											console.log(`Clicked API: ${api.name}`);
+											setSelectedApiName(api.name);
+											setActiveEndpoint(null);
+											setTestResponse({});
+										}}
+									>
+										<span className="api-name">{api.name}</span>
+										<span className="api-blueprint">{api.blueprint}</span>
+									</div>
+								))}
 							</div>
 						</div>
 					</div>
@@ -350,7 +414,7 @@ export default function ApiDocs() {
 							</button>
 						</div>
 						<div className="sidebar-scroll">
-							{selectedApi && endpoints.length > 0 && (
+							{selectedApiName && endpoints.length > 0 && (
 								<div className={`endpoint-list ${loadingEndpoints ? 'loading' : ''}`}>
 									{endpoints.map(endpoint => (
 										<div
@@ -373,7 +437,7 @@ export default function ApiDocs() {
 						<div className="empty-state">
 							<p>Loading endpoint details...</p>
 						</div>
-					) : selectedApi && endpointDetails.length > 0 ? (
+					) : selectedApiName && endpointDetails.length > 0 ? (
 						<div className="endpoints-container">
 							{endpointDetails.map((endpointDetail) => (
 								<div
@@ -450,12 +514,16 @@ export default function ApiDocs() {
 											<h3>Try it out</h3>
 											<div className="test-section">
 												<button
-													onClick={() => testEndpoint(
-														endpointDetail.function,
-														endpointDetail.route || `${selectedApi}/${endpointDetail.function}`,
-														endpointDetail.method || 'GET',
-														endpointDetail.params
-													)}
+													onClick={() => {
+														const apisMap = new Map(apis.map(api => [api.name, api]));
+														const basePath = buildBasePath(selectedApiName!, apisMap);
+														testEndpoint(
+															endpointDetail.function,
+															endpointDetail.route || `${basePath}/${endpointDetail.function}`,
+															endpointDetail.method || 'GET',
+															endpointDetail.params
+														);
+													}}
 													disabled={loading[endpointDetail.function]}
 													className="test-button"
 												>
