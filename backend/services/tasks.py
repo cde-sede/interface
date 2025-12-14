@@ -302,6 +302,14 @@ class Service(ABCService):
         created_at = time.time()
         self._queue.put((-priority, created_at, task_id))
 
+        # Emit Socket.IO event to refresh tasks page
+        try:
+            from .socketio import NullSocketIO
+            socketio = self.manager.get[NullSocketIO]("socketio")
+            socketio.broadcast('refresh_page', {'page': 'tasks'})
+        except Exception:
+            pass  # Socket.IO service might not be available
+
         return task_id
 
     def get_status(self, task_id: int) -> dict | None:
@@ -341,6 +349,45 @@ class Service(ABCService):
             error="Task cancelled by user",
             completed_at=time.time()
         )
+
+        return True
+
+    def requeue(self, task_id: int) -> bool:
+        """
+        Re-queue a pending task that's not currently in the queue.
+        Useful for tasks that were created before a restart.
+
+        Args:
+            task_id: Task ID to requeue
+
+        Returns:
+            True if requeued, False if task not found, not pending, or already running
+        """
+        task = self.task_model.get(task_id)
+        if not task:
+            return False
+
+        # Can only requeue pending tasks
+        if task['status'] != Task.TaskStatus.PENDING:
+            return False
+
+        # Check if task is registered
+        task_name = task['name']
+        with self._registry_lock:
+            if task_name not in self._registry:
+                # Task function not registered anymore
+                self.task_model.update(
+                    task_id,
+                    status=Task.TaskStatus.FAILED,
+                    error=f"Task '{task_name}' is not registered",
+                    completed_at=time.time()
+                )
+                return False
+
+        # Add to priority queue
+        priority = task.get('priority', 0)
+        created_at = task.get('created_at', time.time())
+        self._queue.put((-priority, created_at, task_id))
 
         return True
 
@@ -488,6 +535,14 @@ class Service(ABCService):
             worker_id=threading.current_thread().name
         )
 
+        # Emit Socket.IO event to refresh tasks page
+        try:
+            from .socketio import NullSocketIO
+            socketio = self.manager.get[NullSocketIO]("socketio")
+            socketio.broadcast('refresh_page', {'page': 'tasks'})
+        except Exception:
+            pass  # Socket.IO service might not be available
+
         start_time = time.time()
         result_container = {'result': None, 'error': None, 'timed_out': False}
 
@@ -539,6 +594,14 @@ class Service(ABCService):
                 result=json.dumps(result_container['result']) if result_container['result'] is not None else None,
                 completed_at=time.time()
             )
+
+        # Emit Socket.IO event to refresh tasks page
+        try:
+            from .socketio import NullSocketIO
+            socketio = self.manager.get[NullSocketIO]("socketio")
+            socketio.broadcast('refresh_page', {'page': 'tasks'})
+        except Exception:
+            pass  # Socket.IO service might not be available
 
 
 def setup(manager: Manager[ABCService], /):

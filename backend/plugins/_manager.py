@@ -17,3 +17,8 @@ def _check(m: ModuleType):
 
 
 manager = Manager[ABCPlugin](__name__, checker=_check)
+
+def reload_all_plugins():
+	"""Reload all plugin modules."""
+	print("\n=== Reloading Plugins ===")
+	return manager.reload_all()

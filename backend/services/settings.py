@@ -178,6 +178,38 @@ SETTINGS_DEFINITIONS = [
 		examples=["/tmp/task_worker.lock", "/var/run/app/task_worker.lock"],
 		type_name="string"
 	),
+	SettingDefinition(
+		key="socketio_cors_origins",
+		default="*",
+		description="CORS allowed origins for Socket.IO connections",
+		examples=["*", "http://localhost:3000", "https://example.com"],
+		type_name="string"
+	),
+	SettingDefinition(
+		key="socketio_ping_timeout",
+		default=60,
+		description="Socket.IO ping timeout in seconds",
+		examples=[30, 60, 120],
+		type_name="integer"
+	),
+	SettingDefinition(
+		key="socketio_ping_interval",
+		default=25,
+		description="Socket.IO ping interval in seconds",
+		examples=[10, 25, 50],
+		type_name="integer"
+	),
+	SettingDefinition(
+		key="socketio_enabled",
+		default=True,
+		description="Enable Socket.IO service",
+		valid_values=[True, False],
+		options={
+			"true": "Enable real-time Socket.IO communication",
+			"false": "Disable Socket.IO (service will be a no-op)"
+		},
+		type_name="boolean"
+	),
 ]
 
 # Create a lookup dict for quick access
@@ -241,6 +273,22 @@ class Service(ABCService):
 	@property
 	def task_worker_lock_file(self) -> str:
 		return _SETTINGS_BY_KEY["task_worker_lock_file"].get_value(self.r[str])
+
+	@property
+	def socketio_cors_origins(self) -> str:
+		return _SETTINGS_BY_KEY["socketio_cors_origins"].get_value(self.r[str])
+
+	@property
+	def socketio_ping_timeout(self) -> int:
+		return _SETTINGS_BY_KEY["socketio_ping_timeout"].get_value(self.r[int])
+
+	@property
+	def socketio_ping_interval(self) -> int:
+		return _SETTINGS_BY_KEY["socketio_ping_interval"].get_value(self.r[int])
+
+	@property
+	def socketio_enabled(self) -> bool:
+		return _SETTINGS_BY_KEY["socketio_enabled"].get_value(self.r[bool])
 
 	@staticmethod
 	def get_default_settings() -> dict:

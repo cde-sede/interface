@@ -68,7 +68,7 @@ export default function ApiDocs() {
 
 	// Fetch all APIs
 	useEffect(() => {
-		fetch('http://localhost:5000/api/')
+		fetch('/api/')
 			.then(async res => {
 				if (!res.ok) {
 					const text = await res.text();
@@ -127,7 +127,7 @@ export default function ApiDocs() {
 		const basePath = buildBasePath(selectedApiName, apisMap);
 
 		// Fetch list of endpoints
-		fetch(`http://localhost:5000${basePath}/describe`)
+		fetch(`${basePath}/describe`)
 			.then(async res => {
 				if (!res.ok) {
 					const text = await res.text();
@@ -146,7 +146,7 @@ export default function ApiDocs() {
 				// Fetch details for all endpoints
 				return Promise.all(
 					endpointList.map((endpoint: EndpointDoc) =>
-						fetch(`http://localhost:5000${basePath}/describe?f=${encodeURIComponent(endpoint.function)}`)
+						fetch(`${basePath}/describe?f=${encodeURIComponent(endpoint.function)}`)
 							.then(async res => {
 								if (!res.ok) {
 									console.error(`HTTP ${res.status} for ${endpoint.function}`);
@@ -310,7 +310,7 @@ export default function ApiDocs() {
 		// Don't clear the response immediately to avoid flicker - keep old response while loading
 
 		try {
-			let url = `http://localhost:5000${route}`;
+			let url = `${route}`;
 			let body: any = undefined;
 			const queryParams: Record<string, string> = {};
 			const headers: Record<string, string> = {};

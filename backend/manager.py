@@ -326,6 +326,87 @@ class Manager[T]:
 		self._modules[name] = instance
 		return instance
 
+	def reload(self, name: str):
+		"""
+		Reload a module, forcing a fresh import and re-execution.
+
+		This is useful for development when you want to update a module without
+		restarting the entire application.
+
+		Args:
+			name: Module path to reload (e.g., 'auth', 'models.users')
+
+		Returns:
+			The reloaded module instance
+
+		Example:
+			manager.reload('auth')  # Reload the auth plugin
+			manager.reload('models.users')  # Reload the users model
+		"""
+		if name not in self._modules_specs:
+			raise ModuleLoadError(f"No module named '{name}' found")
+
+		# Invalidate cache for this module and all its sub-paths
+		invalidated = self.invalidate_cache(name)
+		print(f"Invalidated {invalidated} cache entries for '{name}'")
+
+		# Remove from loaded modules (force fresh load)
+		if name in self._modules:
+			del self._modules[name]
+			print(f"Removed old instance of '{name}'")
+
+		# Load fresh - load() will create a new module from spec and execute it
+		print(f"Loading fresh instance of '{name}'")
+		instance = self.load(name)
+		print(f"Reloaded '{name}' successfully")
+
+		return instance
+
+	def reload_all(self):
+		"""
+		Reload all currently loaded modules in this manager.
+
+		This will reload modules in the order they were originally loaded.
+		Cache is cleared for all modules.
+
+		Returns:
+			Dict mapping module names to their reloaded instances
+
+		Example:
+			results = manager.reload_all()
+			print(f"Reloaded {len(results)} modules")
+		"""
+		# Get list of currently loaded modules (make a copy since we'll modify _modules)
+		modules_to_reload = list(self._modules.keys())
+
+		print(f"Starting reload_all for {len(modules_to_reload)} modules...")
+
+		# Clear entire cache upfront
+		cleared = self.clear_cache()
+		print(f"Cleared {cleared} cache entries")
+
+		results = {}
+		errors = {}
+
+		for module_name in modules_to_reload:
+			try:
+				print(f"\n--- Reloading '{module_name}' ---")
+				instance = self.reload(module_name)
+				results[module_name] = instance
+			except Exception as e:
+				print(f"ERROR: Failed to reload '{module_name}': {e}")
+				traceback.print_exception(e)
+				errors[module_name] = e
+
+		print(f"\n=== Reload Summary ===")
+		print(f"Successfully reloaded: {len(results)}/{len(modules_to_reload)}")
+		if errors:
+			print(f"Failed to reload: {len(errors)}")
+			for name, error in errors.items():
+				print(f"  - {name}: {error}")
+
+		return results
+
 	def list_plugins(self):
 		"""List all discovered plugins by their name property (for loaded) or module name (for unloaded)."""
 		result = []

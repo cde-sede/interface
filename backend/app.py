@@ -3,32 +3,29 @@ from flask_cors import CORS
 from pathlib import Path
 import os
 import atexit
+from werkzeug.routing import Rule
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
-
-#from .plugins import manager
-#for plugin_name in manager.list_plugins():
-#	manager.load(plugin_name)
-#	print(f'{plugin_name=}')
-#
-#print(manager.get('module_example_0').name)
 
 def load_apis():
 	from .api import manager, ABCApi
 	for api in manager.list_plugins(): manager.load(api)
 
-	root = manager.get("api")
-	assert isinstance(root, ABCApi)
-
-	app.register_blueprint(root.blueprint)
+	app.register_blueprint(manager.get[ABCApi]("api").blueprint)
+	app.register_blueprint(manager.get[ABCApi]("admin").blueprint)
 
 def load_services():
-	from .services import manager
+	from .services import manager, ABCService
 	for service in manager.list_plugins(): manager.load(service)
 
-	manager.get("prometheus").initialize(app)
-	manager.get("metrics").initialize(app)
+	from .services.prometheus import NullPrometheus
+	from .services.metrics import NullMetrics
+	from .services.socketio import NullSocketIO
+
+	manager.get[NullPrometheus]("prometheus").initialize(app)
+	manager.get[NullMetrics]("metrics").initialize(app)
+	manager.get[NullSocketIO]("socketio").initialize(app)
 
 def load_plugins():
 	from .plugins import manager
@@ -67,15 +64,78 @@ def health():
 def hello():
 	return jsonify({'message': 'Hello from Flask!'})
 
+@app.errorhandler(404)
+def not_found(e):
+	"""
+	Handle 404 errors by serving the React app for non-API routes.
+	This allows React Router to handle client-side routing.
+	"""
+	from flask import request
+
+	path = request.path.rstrip('/')
+
+	# If it's an API endpoint with sub-paths (e.g., /api/v1/users, /admin/menu),
+	# return JSON 404
+	if (path.startswith('/api/') and path.count('/') > 1) or \
+	   (path.startswith('/admin/') and path.count('/') > 1):
+		return jsonify({'error': 'Not found'}), 404
+
+	# For all other routes (including /admin, /docs), serve the React app (SPA)
+	if app.static_folder:
+		return send_from_directory(app.static_folder, 'index.html')
+	else:
+		abort(404)
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
+	# Serve static files (JS, CSS, images, etc.)
 	if path and app.static_folder and (Path(app.static_folder) / path).exists():
 		return send_from_directory(app.static_folder, path)
+
+	# For all other paths (including /admin, /docs), serve index.html
+	# Let React Router handle the routing
 	elif app.static_folder:
 		return send_from_directory(app.static_folder, 'index.html')
 	else:
 		abort(404)
+
+def reload_all():
+	"""
+	Reload all modules (services, plugins, and APIs).
+
+	This is the master reload function that:
+	1. Reloads services
+	2. Reloads plugins
+	3. Unregisters API blueprints
+	4. Reloads APIs
+	5. Re-registers API blueprints
+
+	Returns:
+		Dict with results from each manager
+	"""
+	from .services._manager import reload_all_services
+	from .plugins._manager import reload_all_plugins
+	from .api._manager import reload_all_apis
+
+	print("\n" + "=" * 60)
+	print("STARTING FULL SYSTEM RELOAD")
+	print("=" * 60)
+
+	results = {
+		'services': reload_all_services(),
+		'plugins': reload_all_plugins(),
+		'apis': reload_all_apis(app)
+	}
+
+	print("\n" + "=" * 60)
+	print("FULL SYSTEM RELOAD COMPLETE")
+	print("=" * 60)
+	print(f"Services: {len(results['services'])} reloaded")
+	print(f"Plugins: {len(results['plugins'])} reloaded")
+	print(f"APIs: {len(results['apis'])} reloaded")
+
+	return results
 
 if __name__ == '__main__':
 	app.run(debug=True, host='0.0.0.0', port=5000)

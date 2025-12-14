@@ -16,3 +16,8 @@ def _check(m: ModuleType):
 
 
 manager = Manager[ABCService](__name__, checker=_check)
+
+def reload_all_services():
+	"""Reload all service modules."""
+	print("\n=== Reloading Services ===")
+	return manager.reload_all()

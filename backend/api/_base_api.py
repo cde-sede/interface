@@ -31,6 +31,7 @@ class Metadata:
 
 def cond(functor: Callable):
 	def decorator(func):
+		@wraps(func)
 		def wrapper(*args, **kwargs):
 			if functor(*args, **kwargs):
 				return func(*args, **kwargs)

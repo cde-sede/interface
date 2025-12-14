@@ -7,10 +7,22 @@ export default defineConfig({
   build: {
     outDir: '../backend/static',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'recharts': ['recharts'],
+        },
+      },
+    },
   },
   server: {
     proxy: {
       '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
+      // Only proxy /admin API endpoints, not the page itself
+      '^/admin/(?!$)': {
         target: 'http://localhost:5000',
         changeOrigin: true,
       },

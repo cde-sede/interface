@@ -300,7 +300,7 @@ class TasksAPI(ABCApi):
 	)
 	def cleanup_tasks(self):
 		"""Delete old completed/failed/timeout tasks."""
-		data = request.get_json() or {}
+		data = request.get_json(silent=True) or {}
 		days = data.get("days", 7)
 
 		deleted_count = self.tasks.cleanup_old_tasks(days=days)
