@@ -108,3 +108,40 @@ def reload_all_apis(app):
 			print(f"ERROR: Failed to register blueprint for {api_name}: {e}")
 
 	return results
+
+def reload_all(app):
+	"""
+	Reload all modules (services, plugins, and APIs).
+
+	This is the master reload function that:
+	1. Reloads services
+	2. Reloads plugins
+	3. Unregisters API blueprints
+	4. Reloads APIs
+	5. Re-registers API blueprints
+
+	Returns:
+		Dict with results from each manager
+	"""
+	from ..services._manager import reload_all_services
+	from ..plugins._manager import reload_all_plugins
+
+	print("\n" + "=" * 60)
+	print("STARTING FULL SYSTEM RELOAD")
+	print("=" * 60)
+
+	results = {
+		'services': reload_all_services(),
+		'plugins': reload_all_plugins(),
+		'apis': reload_all_apis(app)
+	}
+
+	print("\n" + "=" * 60)
+	print("FULL SYSTEM RELOAD COMPLETE")
+	print("=" * 60)
+	print(f"Services: {len(results['services'])} reloaded")
+	print(f"Plugins: {len(results['plugins'])} reloaded")
+	print(f"APIs: {len(results['apis'])} reloaded")
+
+	return results
+

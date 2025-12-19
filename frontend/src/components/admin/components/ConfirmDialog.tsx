@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 export interface ConfirmDialogProps {
 	message: string;
 	onConfirm: () => void;
@@ -5,9 +7,36 @@ export interface ConfirmDialogProps {
 }
 
 export default function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
+	const dialogRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			// Check if this dialog is the topmost modal
+			const allModals = document.querySelectorAll('.modal-overlay');
+			const thisModal = dialogRef.current?.parentElement;
+			const topmostModal = allModals[allModals.length - 1];
+
+			// Only handle keys if this is the topmost modal
+			if (thisModal === topmostModal) {
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					onConfirm();
+				} else if (e.key === 'Escape') {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					onCancel();
+				}
+			}
+		};
+
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, [onConfirm, onCancel]);
+
 	return (
 		<div className="modal-overlay">
-			<div className="modal-content confirm-dialog">
+			<div ref={dialogRef} className="modal-content confirm-dialog">
 				<div className="modal-header">
 					<h3>Confirm Action</h3>
 				</div>
@@ -18,7 +47,7 @@ export default function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmD
 					<button className="action-button secondary" onClick={onCancel}>
 						Cancel
 					</button>
-					<button className="action-button" onClick={onConfirm}>
+					<button className="action-button" onClick={onConfirm} autoFocus>
 						Confirm
 					</button>
 				</div>

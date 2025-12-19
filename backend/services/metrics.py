@@ -1,12 +1,16 @@
-from typing import TYPE_CHECKING, Any, cast
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, cast, Optional
 if TYPE_CHECKING:
 	from _injected import manager, require, validate_setup
+	from .logs import Service as Logs
 
 from collections import defaultdict
 from datetime import datetime
 from threading import Lock
 from flask import Flask, g, request
 import time
+import json
+import os
 
 from ._base_service import ABCService
 from ._manager import Manager
@@ -81,10 +85,11 @@ class MetricsService(NullMetrics):
 	- Active request count
 	"""
 
-	def __init__(self):
+	def __init__(self, logs: Optional[Logs] = None):
 		self._lock = Lock()
 		self._ready = False
 		self._app = None
+		self._logs = logs
 
 		# Metrics storage
 		self.request_count = defaultdict(int)  # {endpoint: count}
@@ -99,6 +104,10 @@ class MetricsService(NullMetrics):
 		# Startup time
 		self.start_time = datetime.now()
 
+	@property
+	def logs(self) -> Optional[Logs]:
+		return self._logs
+
 	def initialize(self, app: Flask):
 		"""
 		Initialize metrics tracking with Flask app.
@@ -106,6 +115,14 @@ class MetricsService(NullMetrics):
 		Args:
 			app: Flask application instance
 		"""
+		if self._logs:
+			self._logs.info("Initializing metrics service", service="metrics")
+
+		# Load persisted metrics
+		loaded = self.load_from_disk()
+		if loaded and self._logs:
+			self._logs.info("Loaded persisted API metrics", service="metrics")
+
 		self._app = app
 
 		# Register before/after request hooks
@@ -117,6 +134,9 @@ class MetricsService(NullMetrics):
 		self._app.errorhandler(Exception)(self._handle_exception)
 
 		self._ready = True
+
+		if self._logs:
+			self._logs.info("Metrics service initialized successfully", service="metrics")
 
 	def _before_request(self):
 		"""Track request start time and increment active requests."""
@@ -247,6 +267,79 @@ class MetricsService(NullMetrics):
 		stats = self.get_stats()
 		return stats['endpoints'].get(endpoint)
 
+	def save_to_disk(self, filepath: str = "metrics/api_metrics.json"):
+		"""Save metrics to disk"""
+		with self._lock:
+			# Create directory if it doesn't exist
+			os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+			# Convert defaultdicts to regular dicts for JSON serialization
+			data = {
+				'total_requests': self.total_requests,
+				'total_errors': self.total_errors,
+				'start_time': self.start_time.isoformat(),
+				'request_count': dict(self.request_count),
+				'response_times': {k: v for k, v in self.response_times.items()},
+				'error_count': dict(self.error_count),
+				'status_codes': {
+					endpoint: dict(codes)
+					for endpoint, codes in self.status_codes.items()
+				},
+				'error_types': {
+					endpoint: dict(errors)
+					for endpoint, errors in self.error_types.items()
+				}
+			}
+
+			with open(filepath, 'w') as f:
+				json.dump(data, f, indent=2)
+
+	def load_from_disk(self, filepath: str = "metrics/api_metrics.json"):
+		"""Load metrics from disk"""
+		if not os.path.exists(filepath):
+			return False
+
+		try:
+			with open(filepath, 'r') as f:
+				data = json.load(f)
+
+			with self._lock:
+				self.total_requests = data.get('total_requests', 0)
+				self.total_errors = data.get('total_errors', 0)
+
+				# Load start time
+				start_time_str = data.get('start_time')
+				if start_time_str:
+					self.start_time = datetime.fromisoformat(start_time_str)
+
+				# Load request counts
+				for endpoint, count in data.get('request_count', {}).items():
+					self.request_count[endpoint] = count
+
+				# Load response times
+				for endpoint, times in data.get('response_times', {}).items():
+					self.response_times[endpoint] = times
+
+				# Load error counts
+				for endpoint, count in data.get('error_count', {}).items():
+					self.error_count[endpoint] = count
+
+				# Load status codes
+				for endpoint, codes in data.get('status_codes', {}).items():
+					for code, count in codes.items():
+						self.status_codes[endpoint][int(code)] = count
+
+				# Load error types
+				for endpoint, errors in data.get('error_types', {}).items():
+					for error_type, count in errors.items():
+						self.error_types[endpoint][error_type] = count
+
+			return True
+		except Exception as e:
+			if self._logs:
+				self._logs.error(f"Failed to load API metrics", service="metrics", error=str(e))
+			return False
+
 	@property
 	def name(self) -> str:
 		return "metrics"
@@ -257,9 +350,17 @@ class MetricsService(NullMetrics):
 
 
 def setup(manager: Manager[ABCService], /):
+	from .logs import Service as Logs
 	settings: Settings = cast(Settings, require('settings'))
+	logs_service = None
+	try:
+		require('logs')
+		logs_service = manager.get[Logs]('logs')
+	except:
+		pass
+
 	if settings.metrics == 'enabled':
-		return MetricsService()
+		return MetricsService(logs=logs_service)
 	elif settings.metrics == 'disabled':
 		return NullMetrics()
 	raise ValueError("Invalid settings", settings.metrics)

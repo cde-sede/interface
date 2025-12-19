@@ -3,7 +3,8 @@ Task service for background task execution.
 
 Manages task registration, submission, and execution via worker thread pool.
 """
-from typing import TYPE_CHECKING, Callable, Any
+from __future__ import annotations
+from typing import TYPE_CHECKING, Callable, Any, Optional
 import threading
 import time
 import json
@@ -14,9 +15,10 @@ import fcntl
 
 if TYPE_CHECKING:
     from _injected import manager, require, validate_setup
+    from .logs import Service as Logs
 
 from ..manager import Manager
-from ..services.settings import Service as Settings
+from .settings import Service as Settings
 from ..plugins.models.tasks import Task
 from ..plugins.model import Plugin as Models
 from ._base_service import ABCService
@@ -38,6 +40,7 @@ class Service(ABCService):
     def __init__(self, manager: Manager[ABCService]):
         self.manager = manager
         self.settings = manager.get[Settings]('settings')
+        self._logs: Optional[Logs] = None
         self._task_model = None
 
         # Task registry: {name: {func: Callable, timeout: float | None}}
@@ -77,6 +80,13 @@ class Service(ABCService):
         if self._task_model is None:
             self._task_model = self.manager.get[Models]('plugins.models').tasks
         return self._task_model
+
+    @property
+    def logs(self):
+        if self._logs is None or not self._logs.ready:
+            from .logs import Service as Logs
+            self._logs = self.manager.get[Logs]('logs')
+        return self._logs
 
     @property
     def name(self) -> str:
@@ -125,7 +135,8 @@ class Service(ABCService):
             self._start_workers()
             self._workers_enabled = True
 
-            print(f"[Tasks] Worker lock acquired by PID {os.getpid()}, starting {self._worker_count} workers")
+            self.logs.info(f"Worker lock acquired, starting workers", service="tasks",
+                          pid=os.getpid(), worker_count=self._worker_count)
             return True
 
         except (OSError, IOError) as e:
@@ -137,9 +148,11 @@ class Service(ABCService):
             # Check for stale lock
             if self._check_and_clear_stale_lock(lock_path):
                 # Stale lock was cleared, try again (recursive, but only once)
-                print(f"[Tasks] Cleared stale lock, retrying acquisition...")
+                self.logs.info("Cleared stale lock, retrying acquisition", service="tasks")
                 return self._try_acquire_worker_lock_once(lock_path)
 
+            self.logs.warning("Failed to acquire worker lock, another process is running workers",
+                            service="tasks", error=str(e))
             return False
 
     def _try_acquire_worker_lock_once(self, lock_path: str) -> bool:
@@ -162,13 +175,16 @@ class Service(ABCService):
             self._start_workers()
             self._workers_enabled = True
 
-            print(f"[Tasks] Worker lock acquired by PID {os.getpid()} after clearing stale lock")
+            self.logs.info("Worker lock acquired after clearing stale lock", service="tasks",
+                          pid=os.getpid())
             return True
 
-        except (OSError, IOError):
+        except (OSError, IOError) as e:
             if self._lock_file:
                 self._lock_file.close()
                 self._lock_file = None
+            self.logs.error(f"Failed to acquire lock after clearing stale lock", service="tasks",
+                          error=str(e))
             return False
 
     def _check_and_clear_stale_lock(self, lock_path: str) -> bool:
@@ -191,7 +207,7 @@ class Service(ABCService):
                 if not content:
                     # Empty lock file, consider it stale
                     os.remove(lock_path)
-                    print(f"[Tasks] Removed empty lock file")
+                    self.logs.warning("Removed empty lock file", service="tasks")
                     return True
 
                 try:
@@ -199,7 +215,8 @@ class Service(ABCService):
                 except ValueError:
                     # Invalid PID, remove lock file
                     os.remove(lock_path)
-                    print(f"[Tasks] Removed lock file with invalid PID: {content}")
+                    self.logs.warning(f"Removed lock file with invalid PID", service="tasks",
+                                    invalid_pid=content)
                     return True
 
             # Check if process is still running
@@ -207,17 +224,17 @@ class Service(ABCService):
                 # Send signal 0 to check if process exists (doesn't actually kill it)
                 os.kill(pid, 0)
                 # Process exists, lock is valid
-                print(f"[Tasks] Lock held by running process PID {pid}")
+                self.logs.debug("Lock held by running process", service="tasks", pid=pid)
                 return False
             except OSError:
                 # Process doesn't exist, lock is stale
                 os.remove(lock_path)
-                print(f"[Tasks] Removed stale lock from dead process PID {pid}")
+                self.logs.warning("Removed stale lock from dead process", service="tasks", pid=pid)
                 return True
 
         except Exception as e:
             # If anything goes wrong, don't remove the lock file (safe default)
-            print(f"[Tasks] Error checking stale lock: {e}")
+            self.logs.error("Error checking stale lock", service="tasks", error=str(e))
             return False
 
     def _release_worker_lock(self) -> None:
@@ -230,6 +247,21 @@ class Service(ABCService):
                 pass
             finally:
                 self._lock_file = None
+
+    def _emit_refresh_event(self, task_id: int = None):
+        """Emit Socket.IO event to refresh tasks page"""
+        try:
+            from .socketio import NullSocketIO
+            socketio = self.manager.get[NullSocketIO]("socketio")
+            app = getattr(socketio, 'app', None)
+
+            if app:
+                with app.app_context():
+                    socketio.broadcast('refresh_page', {'page': 'tasks'})
+            else:
+                socketio.broadcast('refresh_page', {'page': 'tasks'})
+        except Exception:
+            pass
 
     def register(self, func: Callable | None = None, *, name: str | None = None, timeout: float | None = None) -> Callable:
         """
@@ -257,6 +289,9 @@ class Service(ABCService):
                     'func': f,
                     'timeout': timeout
                 }
+
+            self.logs.debug(f"Registered task function", service="tasks",
+                          task_name=task_name, timeout=timeout)
 
             return f
 
@@ -303,12 +338,10 @@ class Service(ABCService):
         self._queue.put((-priority, created_at, task_id))
 
         # Emit Socket.IO event to refresh tasks page
-        try:
-            from .socketio import NullSocketIO
-            socketio = self.manager.get[NullSocketIO]("socketio")
-            socketio.broadcast('refresh_page', {'page': 'tasks'})
-        except Exception:
-            pass  # Socket.IO service might not be available
+        self._emit_refresh_event(task_id)
+
+        self.logs.info(f"Task submitted to queue", service="tasks",
+                      task_id=task_id, task_name=task_name, priority=priority)
 
         return task_id
 
@@ -493,8 +526,8 @@ class Service(ABCService):
 
             except Exception as e:
                 # Log unexpected worker errors but continue
-                print(f"Worker {worker_id} error: {e}")
-                traceback.print_exc()
+                self.logs.exception(f"Worker error", service="tasks",
+                                  worker_id=worker_id, error=str(e))
 
     def _execute_task(self, task_id: int) -> None:
         """
@@ -535,13 +568,11 @@ class Service(ABCService):
             worker_id=threading.current_thread().name
         )
 
+        self.logs.info(f"Executing task", service="tasks",
+                      task_id=task_id, task_name=task_name)
+
         # Emit Socket.IO event to refresh tasks page
-        try:
-            from .socketio import NullSocketIO
-            socketio = self.manager.get[NullSocketIO]("socketio")
-            socketio.broadcast('refresh_page', {'page': 'tasks'})
-        except Exception:
-            pass  # Socket.IO service might not be available
+        self._emit_refresh_event(task_id)
 
         start_time = time.time()
         result_container = {'result': None, 'error': None, 'timed_out': False}
@@ -563,6 +594,9 @@ class Service(ABCService):
                 # Task exceeded timeout (thread still running but we abandon it)
                 result_container['timed_out'] = True
                 elapsed = time.time() - start_time
+                self.logs.warning(f"Task exceeded timeout", service="tasks",
+                                task_id=task_id, task_name=task_name,
+                                timeout=timeout, elapsed=elapsed)
                 self.task_model.update(
                     task_id,
                     status=Task.TaskStatus.TIMEOUT,
@@ -580,6 +614,9 @@ class Service(ABCService):
 
         # Handle result or error
         if result_container['error']:
+            self.logs.error(f"Task failed", service="tasks",
+                          task_id=task_id, task_name=task_name,
+                          error=str(result_container['error']))
             self.task_model.update(
                 task_id,
                 status=Task.TaskStatus.FAILED,
@@ -588,6 +625,10 @@ class Service(ABCService):
                 completed_at=time.time()
             )
         else:
+            elapsed = time.time() - start_time
+            self.logs.info(f"Task completed successfully", service="tasks",
+                         task_id=task_id, task_name=task_name,
+                         duration=f"{elapsed:.2f}s")
             self.task_model.update(
                 task_id,
                 status=Task.TaskStatus.COMPLETED,
@@ -596,17 +637,13 @@ class Service(ABCService):
             )
 
         # Emit Socket.IO event to refresh tasks page
-        try:
-            from .socketio import NullSocketIO
-            socketio = self.manager.get[NullSocketIO]("socketio")
-            socketio.broadcast('refresh_page', {'page': 'tasks'})
-        except Exception:
-            pass  # Socket.IO service might not be available
+        self._emit_refresh_event(task_id)
 
 
 def setup(manager: Manager[ABCService], /):
     """Setup function for service registration"""
     require('settings')
+    require('logs')
     # Note: plugins.models is lazy-loaded to avoid circular dependency
     return Service(manager)
 

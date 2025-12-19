@@ -158,6 +158,45 @@ class User(ABCModel):
 			cursor.execute("SELECT 1 FROM users WHERE email = ? LIMIT 1", (email,))
 			return cursor.fetchone() is not None
 
+	def get_all(self, limit: int = 50, offset: int = 0) -> list[dict]:
+		"""Get all users with pagination"""
+		with self.db() as cursor:
+			cursor.execute(
+				"SELECT id, username, email, level, created_at, last_login FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?",
+				(limit, offset)
+			)
+			rows = cursor.fetchall()
+
+		return [
+			{
+				'id': row[0],
+				'username': row[1],
+				'email': row[2],
+				'level': row[3],
+				'created_at': row[4],
+				'last_login': row[5]
+			}
+			for row in rows
+		]
+
+	def get_count(self) -> int:
+		"""Get total count of users"""
+		with self.db() as cursor:
+			cursor.execute("SELECT COUNT(*) FROM users")
+			result = cursor.fetchone()
+			return result[0] if result else 0
+
+	def get_column_definitions(self) -> list[dict]:
+		"""Get column definitions for admin UI"""
+		return [
+			{"key": "id", "label": "ID", "type": "number", "sortable": True, "truncate": False},
+			{"key": "username", "label": "Username", "type": "text", "sortable": True, "truncate": False},
+			{"key": "email", "label": "Email", "type": "text", "sortable": True, "truncate": False},
+			{"key": "level", "label": "Level", "type": "number", "sortable": True, "truncate": False},
+			{"key": "created_at", "label": "Created", "type": "date", "sortable": True, "truncate": False},
+			{"key": "last_login", "label": "Last Login", "type": "date", "sortable": True, "truncate": False},
+		]
+
 
 def setup(manager: Manager[ABCPlugin], /):
 	return User(manager)

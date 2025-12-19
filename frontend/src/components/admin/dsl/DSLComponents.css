@@ -1,0 +1,332 @@
+/* DSL Component Styles */
+
+/* Divider */
+.dsl-divider {
+	display: flex;
+	align-items: center;
+	margin: 1rem 0;
+}
+
+.dsl-divider-horizontal {
+	width: 100%;
+	height: 1px;
+	color: var(--theme-card-border);
+}
+
+.dsl-divider-vertical {
+	width: 1px;
+	height: 100%;
+	background-color: var(--theme-card-border);
+}
+
+.dsl-divider-solid {
+	border-style: solid;
+}
+
+.dsl-divider-dashed {
+	border-style: dashed;
+}
+
+.dsl-divider-dotted {
+	border-style: dotted;
+}
+
+.dsl-divider-label {
+	padding: 0 1rem;
+	color: var(--theme-main-text-muted);
+	font-size: 0.875rem;
+	white-space: nowrap;
+	background-color: var(--theme-main-bg);
+}
+
+/* Badge */
+.dsl-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.25rem 0.75rem;
+	border-radius: 9999px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.dsl-badge-small {
+	font-size: 0.75rem;
+	padding: 0.125rem 0.5rem;
+}
+
+.dsl-badge-medium {
+	font-size: 0.875rem;
+}
+
+.dsl-badge-large {
+	font-size: 1rem;
+	padding: 0.375rem 1rem;
+}
+
+.dsl-badge-default {
+	background-color: var(--theme-sidebar-bg);
+	color: var(--theme-main-text);
+	border: 1px solid var(--theme-card-border);
+}
+
+.dsl-badge-success {
+	background-color: var(--theme-method-get-bg);
+	color: var(--theme-method-get-text);
+}
+
+.dsl-badge-error {
+	background-color: var(--theme-method-delete-bg);
+	color: var(--theme-method-delete-text);
+}
+
+.dsl-badge-warning {
+	background-color: rgba(245, 158, 11, 0.15);
+	color: #f59e0b;
+}
+
+.dsl-badge-info {
+	background-color: rgba(59, 130, 246, 0.15);
+	color: #3b82f6;
+}
+
+.dsl-badge-primary {
+	background-color: var(--theme-button-primary-bg);
+	color: var(--theme-button-primary-text);
+}
+
+.dsl-badge-icon {
+	font-size: 1em;
+}
+
+/* Progress Bar */
+.dsl-progress-container {
+	width: 100%;
+}
+
+.dsl-progress-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 0.5rem;
+}
+
+.dsl-progress-label {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--theme-main-text);
+}
+
+.dsl-progress-percentage {
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--theme-main-text-muted);
+}
+
+.dsl-progress-bar {
+	width: 100%;
+	height: 1rem;
+	background-color: var(--theme-sidebar-bg);
+	border-radius: 0.5rem;
+	overflow: hidden;
+	position: relative;
+}
+
+.dsl-progress-fill {
+	height: 100%;
+	transition: width 0.3s ease;
+	border-radius: 0.5rem;
+}
+
+.dsl-progress-bar-default .dsl-progress-fill {
+	background-color: var(--theme-button-primary-bg);
+}
+
+.dsl-progress-bar-success .dsl-progress-fill {
+	background-color: var(--theme-method-get-bg);
+}
+
+.dsl-progress-bar-error .dsl-progress-fill {
+	background-color: var(--theme-method-delete-bg);
+}
+
+.dsl-progress-bar-warning .dsl-progress-fill {
+	background-color: #f59e0b;
+}
+
+.dsl-progress-bar-info .dsl-progress-fill {
+	background-color: #3b82f6;
+}
+
+.dsl-progress-bar-striped .dsl-progress-fill {
+	background-image: linear-gradient(
+	45deg,
+	rgba(255, 255, 255, 0.15) 25%,
+	transparent 25%,
+	transparent 50%,
+	rgba(255, 255, 255, 0.15) 50%,
+	rgba(255, 255, 255, 0.15) 75%,
+	transparent 75%,
+	transparent
+	);
+	background-size: 1rem 1rem;
+}
+
+.dsl-progress-bar-animated .dsl-progress-fill {
+	animation: progress-bar-stripes 1s linear infinite;
+}
+
+@keyframes progress-bar-stripes {
+	0% {
+		background-position: 1rem 0;
+	}
+	100% {
+		background-position: 0 0;
+	}
+}
+
+/* Card */
+.dsl-card {
+	border-radius: 0.5rem;
+	overflow: hidden;
+	background-color: var(--theme-card-bg);
+	margin-bottom: 1rem;
+}
+
+.dsl-card-default {
+	border: 1px solid var(--theme-card-border);
+}
+
+.dsl-card-outlined {
+	border: 2px solid var(--theme-button-primary-bg);
+}
+
+.dsl-card-elevated {
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dsl-card-header {
+	padding: 1rem;
+	border-bottom: 1px solid var(--theme-card-border);
+}
+
+.dsl-card-title {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--theme-main-text);
+}
+
+.dsl-card-subtitle {
+	margin: 0.25rem 0 0 0;
+	font-size: 0.875rem;
+	color: var(--theme-main-text-muted);
+}
+
+.dsl-card-content {
+	padding: 1rem;
+}
+
+.dsl-card-padding-none .dsl-card-content {
+	padding: 0;
+}
+
+.dsl-card-padding-small .dsl-card-content {
+	padding: 0.5rem;
+}
+
+.dsl-card-padding-medium .dsl-card-content {
+	padding: 1rem;
+}
+
+.dsl-card-padding-large .dsl-card-content {
+	padding: 1.5rem;
+}
+
+.dsl-card-actions {
+	display: flex;
+	gap: 0.5rem;
+	padding: 1rem;
+	border-top: 1px solid var(--theme-card-border);
+	background-color: var(--theme-sidebar-bg);
+}
+
+/* Accordion */
+.dsl-accordion {
+	width: 100%;
+}
+
+.dsl-accordion-item {
+	border: 1px solid var(--theme-card-border);
+	margin-bottom: 0.5rem;
+	border-radius: 0.25rem;
+	overflow: hidden;
+}
+
+.dsl-accordion-bordered .dsl-accordion-item {
+	border: 2px solid var(--theme-button-primary-bg);
+}
+
+.dsl-accordion-separated .dsl-accordion-item {
+	margin-bottom: 1rem;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.dsl-accordion-header {
+	width: 100%;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 1rem;
+	background-color: var(--theme-sidebar-bg);
+	border: none;
+	cursor: pointer;
+	font-size: 1rem;
+	font-weight: 500;
+	color: var(--theme-main-text);
+	text-align: left;
+	transition: background-color 0.2s;
+}
+
+.dsl-accordion-header:hover {
+	background-color: var(--theme-sidebar-item-bg-hover);
+}
+
+.dsl-accordion-item.expanded .dsl-accordion-header {
+	background-color: var(--theme-button-primary-bg);
+	color: var(--theme-button-primary-text);
+}
+
+.dsl-accordion-title {
+	flex: 1;
+}
+
+.dsl-accordion-icon {
+	font-size: 1.25rem;
+	font-weight: bold;
+	transition: transform 0.2s;
+}
+
+.dsl-accordion-item.expanded .dsl-accordion-icon {
+	transform: rotate(180deg);
+}
+
+.dsl-accordion-content {
+	padding: 1rem;
+	border-top: 1px solid var(--theme-card-border);
+	background-color: var(--theme-card-bg);
+}
+
+/* Chart */
+.dsl-chart {
+	width: 100%;
+	margin: 1rem 0;
+}
+
+.chart-error {
+	padding: 2rem;
+	text-align: center;
+	color: var(--theme-main-text-muted);
+	background-color: var(--theme-sidebar-bg);
+	border-radius: 0.25rem;
+}

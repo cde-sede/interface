@@ -168,6 +168,45 @@ class ApiKey(ABCModel):
 
 		return [ApiKeyRecord(*row) for row in rows]
 
+	def get_all(self, limit: int = 50, offset: int = 0) -> list[dict]:
+		"""Get all API keys with pagination"""
+		with self.db() as cursor:
+			cursor.execute(
+				"SELECT id, key, expire, created_at, last_used, level FROM apikeys ORDER BY created_at DESC LIMIT ? OFFSET ?",
+				(limit, offset)
+			)
+			rows = cursor.fetchall()
+
+		return [
+			{
+				'id': row[0],
+				'key': row[1],
+				'expire': row[2],
+				'created_at': row[3],
+				'last_used': row[4],
+				'level': row[5]
+			}
+			for row in rows
+		]
+
+	def get_count(self) -> int:
+		"""Get total count of API keys"""
+		with self.db() as cursor:
+			cursor.execute("SELECT COUNT(*) FROM apikeys")
+			result = cursor.fetchone()
+			return result[0] if result else 0
+
+	def get_column_definitions(self) -> list[dict]:
+		"""Get column definitions for admin UI"""
+		return [
+			{"key": "id", "label": "ID", "type": "number", "sortable": True, "truncate": False},
+			{"key": "key", "label": "Key", "type": "code", "sortable": False, "truncate": True},
+			{"key": "level", "label": "Level", "type": "number", "sortable": True, "truncate": False},
+			{"key": "expire", "label": "Expires", "type": "date", "sortable": True, "truncate": False},
+			{"key": "created_at", "label": "Created", "type": "date", "sortable": True, "truncate": False},
+			{"key": "last_used", "label": "Last Used", "type": "date", "sortable": True, "truncate": False},
+		]
+
 
 def setup(manager: Manager[ABCPlugin], /):
 	return ApiKey(manager)

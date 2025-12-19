@@ -100,42 +100,5 @@ def serve(path):
 	else:
 		abort(404)
 
-def reload_all():
-	"""
-	Reload all modules (services, plugins, and APIs).
-
-	This is the master reload function that:
-	1. Reloads services
-	2. Reloads plugins
-	3. Unregisters API blueprints
-	4. Reloads APIs
-	5. Re-registers API blueprints
-
-	Returns:
-		Dict with results from each manager
-	"""
-	from .services._manager import reload_all_services
-	from .plugins._manager import reload_all_plugins
-	from .api._manager import reload_all_apis
-
-	print("\n" + "=" * 60)
-	print("STARTING FULL SYSTEM RELOAD")
-	print("=" * 60)
-
-	results = {
-		'services': reload_all_services(),
-		'plugins': reload_all_plugins(),
-		'apis': reload_all_apis(app)
-	}
-
-	print("\n" + "=" * 60)
-	print("FULL SYSTEM RELOAD COMPLETE")
-	print("=" * 60)
-	print(f"Services: {len(results['services'])} reloaded")
-	print(f"Plugins: {len(results['plugins'])} reloaded")
-	print(f"APIs: {len(results['apis'])} reloaded")
-
-	return results
-
 if __name__ == '__main__':
 	app.run(debug=True, host='0.0.0.0', port=5000)

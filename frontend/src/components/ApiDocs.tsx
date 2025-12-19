@@ -147,22 +147,22 @@ export default function ApiDocs() {
 				return Promise.all(
 					endpointList.map((endpoint: EndpointDoc) =>
 						fetch(`${basePath}/describe?f=${encodeURIComponent(endpoint.function)}`)
-							.then(async res => {
-								if (!res.ok) {
-									console.error(`HTTP ${res.status} for ${endpoint.function}`);
-									return null;
-								}
-								try {
-									return await res.json();
-								} catch (e) {
-									console.error(`Invalid JSON for ${endpoint.function}:`, e);
-									return null;
-								}
-							})
-							.catch(err => {
-								console.error(`Failed to fetch details for ${endpoint.function}:`, err);
+						.then(async res => {
+							if (!res.ok) {
+								console.error(`HTTP ${res.status} for ${endpoint.function}`);
 								return null;
-							})
+							}
+							try {
+								return await res.json();
+							} catch (e) {
+								console.error(`Invalid JSON for ${endpoint.function}:`, e);
+								return null;
+							}
+						})
+						.catch(err => {
+							console.error(`Failed to fetch details for ${endpoint.function}:`, err);
+							return null;
+						})
 					)
 				).then(details => ({ endpointList, details }));
 			})
@@ -473,125 +473,125 @@ export default function ApiDocs() {
 							<p>Loading endpoint details...</p>
 						</div>
 					) : selectedApiName && endpointDetails.length > 0 ? (
-						<div className="endpoints-container">
-							{endpointDetails.map((endpointDetail) => (
-								<div
-									key={endpointDetail.function}
-									className="endpoint-detail"
-									ref={(el) => {
-										endpointRefs.current[endpointDetail.function] = el;
-									}}
-									data-endpoint={endpointDetail.function}
-								>
-									<div className="endpoint-header">
-										<h2>{endpointDetail.function}</h2>
-										<span className={`http-method method-${endpointDetail.method?.toLowerCase() || 'get'}`}>
-											{endpointDetail.method || 'GET'}
-										</span>
-									</div>
-
-									<div className="endpoint-description">
-										<h3>Description</h3>
-										<p>{endpointDetail.description}</p>
-									</div>
-
-									{endpointDetail.docstring && (
-										<div className="endpoint-docstring">
-											<h3>Details</h3>
-											<pre>{endpointDetail.docstring}</pre>
+							<div className="endpoints-container">
+								{endpointDetails.map((endpointDetail) => (
+									<div
+										key={endpointDetail.function}
+										className="endpoint-detail"
+										ref={(el) => {
+											endpointRefs.current[endpointDetail.function] = el;
+										}}
+										data-endpoint={endpointDetail.function}
+									>
+										<div className="endpoint-header">
+											<h2>{endpointDetail.function}</h2>
+											<span className={`http-method method-${endpointDetail.method?.toLowerCase() || 'get'}`}>
+												{endpointDetail.method || 'GET'}
+											</span>
 										</div>
-									)}
 
-									{endpointDetail.documentation && (
-										<div className="endpoint-documentation">
-											<h3>Documentation</h3>
-											<div>{endpointDetail.documentation}</div>
+										<div className="endpoint-description">
+											<h3>Description</h3>
+											<p>{endpointDetail.description}</p>
 										</div>
-									)}
 
-									{endpointDetail.params && Object.keys(endpointDetail.params).length > 0 && (
-										<div className="endpoint-params">
-											<h3>Parameters</h3>
-											<div className="params-list">
-												{Object.entries(endpointDetail.params).map(([key, param]) => (
-													<div key={key} className="param-item">
-														<div className="param-header">
-															<span className="param-name">{key}</span>
-															<span className={`param-badge badge-${param.in}`}>{param.in}</span>
-															{param.required && <span className="param-required">required</span>}
-															<span className="param-type">{param.type}</span>
-														</div>
-														<p className="param-description">{param.description}</p>
-														<input
-															type={param.type === 'number' ? 'number' : param.type === 'boolean' ? 'checkbox' : 'text'}
-															{...(param.type === 'boolean'
-																? { checked: (paramValues[endpointDetail.function]?.[key] === 'true') }
-																: { value: paramValues[endpointDetail.function]?.[key] || '' }
-															)}
-															onChange={(e) => setParamValues(prev => ({
-																...prev,
-																[endpointDetail.function]: {
-																	...(prev[endpointDetail.function] || {}),
-																	[key]: param.type === 'boolean' ? String(e.target.checked) : e.target.value
-																}
-															}))}
-															placeholder={param.type !== 'boolean' ? `Enter ${key}` : undefined}
-															className="param-input"
-														/>
-													</div>
-												))}
+										{endpointDetail.docstring && (
+											<div className="endpoint-docstring">
+												<h3>Details</h3>
+												<pre>{endpointDetail.docstring}</pre>
 											</div>
-										</div>
-									)}
+										)}
 
-									{(!endpointDetail.type || endpointDetail.type === 'route') && (
-										<div className="endpoint-test">
-											<h3>Try it out</h3>
-											<div className="test-section">
-												<button
-													onClick={() => {
-														const apisMap = new Map(apis.map(api => [api.name, api]));
-														const basePath = buildBasePath(selectedApiName!, apisMap);
-														testEndpoint(
-															endpointDetail.function,
-															endpointDetail.route || `${basePath}/${endpointDetail.function}`,
-															endpointDetail.method || 'GET',
-															endpointDetail.params
-														);
-													}}
-													disabled={loading[endpointDetail.function]}
-													className="test-button"
-												>
-													{loading[endpointDetail.function] ? 'Testing...' : 'Execute'}
-												</button>
+										{endpointDetail.documentation && (
+											<div className="endpoint-documentation">
+												<h3>Documentation</h3>
+												<div>{endpointDetail.documentation}</div>
+											</div>
+										)}
 
-												{testResponse[endpointDetail.function] && (
-													<div
-														className={`test-response ${loading[endpointDetail.function] ? 'loading' : ''}`}
-														ref={(el) => {
-															responseRefs.current[endpointDetail.function] = el;
-														}}
-													>
-														<h4>Response</h4>
-														<pre>{testResponse[endpointDetail.function]}</pre>
-														{loading[endpointDetail.function] && (
-															<div className="response-loading-overlay">
-																<span>Loading...</span>
+										{endpointDetail.params && Object.keys(endpointDetail.params).length > 0 && (
+											<div className="endpoint-params">
+												<h3>Parameters</h3>
+												<div className="params-list">
+													{Object.entries(endpointDetail.params).map(([key, param]) => (
+														<div key={key} className="param-item">
+															<div className="param-header">
+																<span className="param-name">{key}</span>
+																<span className={`param-badge badge-${param.in}`}>{param.in}</span>
+																{param.required && <span className="param-required">required</span>}
+																<span className="param-type">{param.type}</span>
 															</div>
-														)}
-													</div>
-												)}
+															<p className="param-description">{param.description}</p>
+															<input
+																type={param.type === 'number' ? 'number' : param.type === 'boolean' ? 'checkbox' : 'text'}
+																{...(param.type === 'boolean'
+																	? { checked: (paramValues[endpointDetail.function]?.[key] === 'true') }
+																	: { value: paramValues[endpointDetail.function]?.[key] || '' }
+																)}
+																onChange={(e) => setParamValues(prev => ({
+																	...prev,
+																	[endpointDetail.function]: {
+																		...(prev[endpointDetail.function] || {}),
+																		[key]: param.type === 'boolean' ? String(e.target.checked) : e.target.value
+																	}
+																}))}
+																placeholder={param.type !== 'boolean' ? `Enter ${key}` : undefined}
+																className="param-input"
+															/>
+														</div>
+													))}
+												</div>
 											</div>
-										</div>
-									)}
+										)}
+
+										{(!endpointDetail.type || endpointDetail.type === 'route') && (
+											<div className="endpoint-test">
+												<h3>Try it out</h3>
+												<div className="test-section">
+													<button
+														onClick={() => {
+															const apisMap = new Map(apis.map(api => [api.name, api]));
+															const basePath = buildBasePath(selectedApiName!, apisMap);
+															testEndpoint(
+																endpointDetail.function,
+																endpointDetail.route || `${basePath}/${endpointDetail.function}`,
+																endpointDetail.method || 'GET',
+																endpointDetail.params
+															);
+														}}
+														disabled={loading[endpointDetail.function]}
+														className="test-button"
+													>
+														{loading[endpointDetail.function] ? 'Testing...' : 'Execute'}
+													</button>
+
+													{testResponse[endpointDetail.function] && (
+														<div
+															className={`test-response ${loading[endpointDetail.function] ? 'loading' : ''}`}
+															ref={(el) => {
+																responseRefs.current[endpointDetail.function] = el;
+															}}
+														>
+															<h4>Response</h4>
+															<pre>{testResponse[endpointDetail.function]}</pre>
+															{loading[endpointDetail.function] && (
+																<div className="response-loading-overlay">
+																	<span>Loading...</span>
+																</div>
+															)}
+														</div>
+													)}
+												</div>
+											</div>
+										)}
+									</div>
+								))}
+							</div>
+						) : (
+								<div className="empty-state">
+									<p>Select an API module to view documentation</p>
 								</div>
-							))}
-						</div>
-					) : (
-						<div className="empty-state">
-							<p>Select an API module to view documentation</p>
-						</div>
-					)}
+							)}
 				</main>
 			</div>
 		</div>

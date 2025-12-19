@@ -1,9 +1,11 @@
 """
 Socket.IO service for real-time bidirectional communication.
 """
+from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Any, Dict, Optional
 if TYPE_CHECKING:
 	from _injected import manager, require, validate_setup
+	from .logs import Service as Logs
 
 from flask import Flask, request as flask_request
 from flask_socketio import SocketIO, join_room, leave_room, disconnect
@@ -21,8 +23,9 @@ class Service(ABCService):
 
 	def __init__(self, manager: Manager[ABCService]):
 		self.manager = manager
-		self.settings = manager.get[Settings]('settings')
 		self._auth_plugin: Optional[AuthPlugin] = None
+		self._settings: Optional[Settings] = None
+		self._logs: Optional[Logs] = None
 
 		self._handlers: Dict[str, Dict[str, Any]] = {}
 		self._handler_lock = threading.Lock()
@@ -36,10 +39,23 @@ class Service(ABCService):
 		self._ready = False
 
 	@property
+	def settings(self) -> Settings:
+		if self._settings is None or not self._settings.ready:
+			self._settings = self.manager.get[Settings]('settings')
+		return self._settings
+
+	@property
 	def auth_plugin(self) -> AuthPlugin:
 		if self._auth_plugin is None:
 			self._auth_plugin = self.manager.get[AuthPlugin]('plugins.auth')
 		return self._auth_plugin
+
+	@property
+	def logs(self):
+		if self._logs is None or not self._logs.ready:
+			from .logs import Service as Logs
+			self._logs = self.manager.get[Logs]('logs')
+		return self._logs
 
 	@property
 	def name(self) -> str:
@@ -51,6 +67,9 @@ class Service(ABCService):
 
 	def initialize(self, app: Flask):
 		"""Initialize Socket.IO with Flask app."""
+		self.logs.info("Initializing Socket.IO service", service="socketio",
+		              cors_origins=self.settings.socketio_cors_origins)
+
 		self.app = app
 		self.sio = SocketIO(
 			app,
@@ -64,40 +83,50 @@ class Service(ABCService):
 
 		self.sio.on_event('connect', self._handle_connect)
 		self.sio.on_event('disconnect', self._handle_disconnect)
+		self.sio.on_event('join_page', self._handle_join_page)
+		self.sio.on_event('leave_page', self._handle_leave_page)
 
 		self._register_all_handlers()
 
 		self._ready = True
+		self.logs.info("Socket.IO service initialized successfully", service="socketio")
 
 	def _handle_connect(self, auth):
 		"""Handle client connection with optional JWT authentication."""
-		# Get token from query params or auth dict
-		token = flask_request.args.get('token')
-		if not token and auth and isinstance(auth, dict):
-			token = auth.get('token')
+		try:
+			# Get token from query params or auth dict
+			token = flask_request.args.get('token')
+			if not token and auth and isinstance(auth, dict):
+				token = auth.get('token')
 
-		session_id = flask_request.sid
+			session_id = flask_request.sid
 
-		if token:
-			user_data = self.auth_plugin.verify_token(token)
-			if user_data:
-				with self._sessions_lock:
-					self._sessions[session_id] = {
-						'user_id': user_data.id,
-						'username': user_data.username,
-						'email': user_data.email,
-						'authenticated': True
-					}
+			if token:
+				user_data = self.auth_plugin.verify_token(token)
+				if user_data:
+					with self._sessions_lock:
+						self._sessions[session_id] = {
+							'user_id': user_data.id,
+							'username': user_data.username,
+							'email': user_data.email,
+							'authenticated': True
+						}
 
-				join_room(f"user_{user_data.id}")
-				print(f"[SocketIO] Authenticated connection: user_id={user_data.id}, sid={session_id}")
-				return True
+					join_room(f"user_{user_data.id}")
+					self.logs.info("Client connected with authentication", service="socketio",
+					             session_id=session_id, user_id=user_data.id,
+					             username=user_data.username)
+					return True
 
-		with self._sessions_lock:
-			self._sessions[session_id] = {'authenticated': False}
+			with self._sessions_lock:
+				self._sessions[session_id] = {'authenticated': False}
 
-		print(f"[SocketIO] Unauthenticated connection: sid={session_id}")
-		return True
+			self.logs.debug("Client connected without authentication", service="socketio",
+			               session_id=session_id)
+			return True
+		except Exception as e:
+			self.logs.error(f"Socket.IO connection error", service="socketio", error=str(e))
+			return False
 
 	def _handle_disconnect(self):
 		"""Cleanup session data and leave rooms."""
@@ -108,11 +137,64 @@ class Service(ABCService):
 
 		if session_data and session_data.get('authenticated'):
 			user_id = session_data.get('user_id')
+			username = session_data.get('username')
 			if user_id:
 				leave_room(f"user_{user_id}")
-				print(f"[SocketIO] Disconnected: user_id={user_id}, sid={session_id}")
+			self.logs.info("Authenticated client disconnected", service="socketio",
+			             session_id=session_id, user_id=user_id, username=username)
 		else:
-			print(f"[SocketIO] Disconnected: sid={session_id}")
+			self.logs.debug("Client disconnected", service="socketio",
+			               session_id=session_id)
+
+	def _handle_join_page(self, data: Dict[str, Any]):
+		"""Handle client joining a page room."""
+		try:
+			page = data.get('page')
+			if not page:
+				self.logs.warning("Join page request missing page name", service="socketio",
+				                session_id=flask_request.sid)
+				return
+
+			session_id = flask_request.sid
+			room_name = f"page_{page}"
+
+			join_room(room_name)
+
+			# Track current page in session
+			with self._sessions_lock:
+				if session_id in self._sessions:
+					self._sessions[session_id]['current_page'] = page
+
+			self.logs.debug("Client joined page room", service="socketio",
+			              session_id=session_id, page=page, room=room_name)
+		except Exception as e:
+			self.logs.error("Error joining page room", service="socketio",
+			              error=str(e), session_id=flask_request.sid)
+
+	def _handle_leave_page(self, data: Dict[str, Any]):
+		"""Handle client leaving a page room."""
+		try:
+			page = data.get('page')
+			if not page:
+				self.logs.warning("Leave page request missing page name", service="socketio",
+				                session_id=flask_request.sid)
+				return
+
+			session_id = flask_request.sid
+			room_name = f"page_{page}"
+
+			leave_room(room_name)
+
+			# Clear current page from session
+			with self._sessions_lock:
+				if session_id in self._sessions:
+					self._sessions[session_id].pop('current_page', None)
+
+			self.logs.debug("Client left page room", service="socketio",
+			              session_id=session_id, page=page, room=room_name)
+		except Exception as e:
+			self.logs.error("Error leaving page room", service="socketio",
+			              error=str(e), session_id=flask_request.sid)
 
 	def get_current_user(self) -> Optional[Dict[str, Any]]:
 		"""Get current user data from session."""
@@ -152,6 +234,9 @@ class Service(ABCService):
 			if self.sio:
 				self.sio.on_event(event, wrapper)
 
+			self.logs.debug(f"Registered Socket.IO event handler", service="socketio",
+			               event=event, authenticated=authenticated)
+
 			return func
 
 		return decorator
@@ -187,6 +272,11 @@ class Service(ABCService):
 		"""Broadcast event to all connected clients."""
 		self.emit(event, data, room=None)
 
+	def broadcast_to_page(self, page: str, event: str, data: Any):
+		"""Broadcast event to all clients viewing a specific page."""
+		room_name = f"page_{page}"
+		self.emit(event, data, room=room_name)
+
 	def join_custom_room(self, room_name: str):
 		"""Join a custom room."""
 		join_room(room_name)
@@ -218,6 +308,9 @@ class NullSocketIO(ABCService):
 	def broadcast(self, *args, **kwargs):
 		pass
 
+	def broadcast_to_page(self, *args, **kwargs):
+		pass
+
 	def on(self, event: str, authenticated: bool = False):
 		def decorator(func: Callable) -> Callable:
 			return func
@@ -246,6 +339,7 @@ class NullSocketIO(ABCService):
 
 def setup(manager: Manager[ABCService], /):
 	require('settings')
+	require('logs')
 	settings = manager.get[Settings]('settings')
 
 	if settings.socketio_enabled:

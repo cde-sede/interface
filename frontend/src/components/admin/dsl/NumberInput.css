@@ -1,0 +1,99 @@
+/**
+ * Number Input Styles
+ */
+
+.number-input-wrapper {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+	width: 100%;
+	border: 1px solid var(--theme-input-border);
+	border-radius: 4px;
+	background-color: var(--theme-input-bg);
+	transition: border-color 0.2s ease;
+}
+
+.number-input-wrapper:focus-within {
+	border-color: var(--theme-input-border-focus);
+	box-shadow: 0 0 0 3px var(--theme-input-focus-ring);
+}
+
+.number-input-wrapper:hover:not(:focus-within) {
+	border-color: var(--theme-input-border-hover);
+}
+
+.number-input-field {
+	flex: 1;
+	padding: 0.5rem;
+	border: none;
+	background-color: transparent;
+	color: var(--theme-input-text);
+	border-radius: 4px 0 0 4px;
+	font-size: 0.875rem;
+	font-family: inherit;
+	outline: none;
+}
+
+.number-input-field:disabled,
+.number-input-field:read-only {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.number-input-wrapper:has(.number-input-field:disabled),
+.number-input-wrapper:has(.number-input-field:read-only) {
+	background-color: var(--theme-sidebar-bg);
+	opacity: 0.6;
+}
+
+.number-input-controls {
+	display: flex;
+	flex-direction: column;
+	width: 28px;
+	border-left: 1px solid var(--theme-input-border);
+}
+
+.number-input-btn {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background-color: transparent;
+	color: var(--theme-main-text);
+	cursor: pointer;
+	font-size: 0.65rem;
+	line-height: 1;
+	padding: 0;
+	margin: 0;
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.number-input-btn:hover:not(:disabled) {
+	background-color: var(--theme-sidebar-bg);
+	color: var(--theme-main-text);
+}
+
+.number-input-btn:active:not(:disabled) {
+	background-color: var(--theme-card-border);
+}
+
+.number-input-btn:disabled {
+	opacity: 0.3;
+	cursor: not-allowed;
+}
+
+.number-input-increment {
+	border-radius: 0 4px 0 0;
+	border-bottom: 1px solid var(--theme-input-border);
+}
+
+.number-input-decrement {
+	border-radius: 0 0 4px 0;
+}
+
+/* Remove focus outline from buttons */
+.number-input-btn:focus,
+.number-input-btn:focus-visible {
+	outline: none;
+}

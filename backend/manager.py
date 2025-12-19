@@ -407,7 +407,7 @@ class Manager[T]:
 
 		return results
 
-	def list_plugins(self):
+	def list_plugins(self) -> list[str]:
 		"""List all discovered plugins by their name property (for loaded) or module name (for unloaded)."""
 		result = []
 		for module_name in self._modules_specs.keys():

@@ -1,6 +1,8 @@
+from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional, cast
 if TYPE_CHECKING:
 	from _injected import manager, require, validate_setup
+	from .logs import Service as Logs
 
 from ._base_service import ABCService
 from ._manager import Manager
@@ -13,7 +15,8 @@ import json
 class Service(ABCService):
 	def __init__(self, manager: Manager[ABCService]):
 		self.manager = manager
-		self.settings = self.manager.get[Settings]('settings')
+		self._settings: Optional[Settings] = None
+		self._logs: Optional[Logs] = None
 
 		# Get Redis connection details from settings
 		# Settings now provide defaults via SettingDefinition
@@ -21,6 +24,9 @@ class Service(ABCService):
 		redis_port = self.settings.redis_port
 		redis_db = self.settings.redis_db
 		redis_password = self.settings.redis_password
+
+		self.logs.info(f"Initializing cache service", service="cache",
+		               host=redis_host, port=redis_port, db=redis_db)
 
 		# Initialize Redis connection (synchronous client)
 		self._redis: Redis = redis.Redis(
@@ -35,12 +41,31 @@ class Service(ABCService):
 
 		self._ready = self._check_connection()
 
+		if self._ready:
+			self.logs.info("Cache service connected successfully", service="cache")
+		else:
+			self.logs.warning("Cache service failed to connect to Redis", service="cache")
+
+	@property
+	def settings(self) -> Settings:
+		if self._settings is None or not self._settings.ready:
+			self._settings = self.manager.get[Settings]('settings')
+		return self._settings
+
+	@property
+	def logs(self):
+		if self._logs is None or not self._logs.ready:
+			from .logs import Service as Logs
+			self._logs = self.manager.get[Logs]('logs')
+		return self._logs
+
 	def _check_connection(self) -> bool:
 		"""Check if Redis connection is available."""
 		try:
 			cast(bool, self._redis.ping())
 			return True
-		except (redis.ConnectionError, redis.TimeoutError):
+		except (redis.ConnectionError, redis.TimeoutError) as e:
+			self.logs.error(f"Redis connection check failed: {e}", service="cache")
 			return False
 
 	@property
@@ -199,6 +224,7 @@ class Service(ABCService):
 
 def setup(manager: Manager[ABCService], /):
 	require("settings")
+	require("logs")
 	return Service(manager)
 
 if TYPE_CHECKING:

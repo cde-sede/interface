@@ -1,6 +1,8 @@
-from typing import TYPE_CHECKING
+from __future__ import annotations
+from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
 	from _injected import manager, require, validate_setup
+	from .logs import Service as Logs
 
 from collections.abc import Callable
 from ._base_service import ABCService
@@ -38,6 +40,7 @@ class Service(ABCService):
 		self.manager = manager
 		self._query: Callable | None = None
 		self._ready = False
+		self._logs: Optional[Logs] = None
 
 	@property
 	def query(self):
@@ -46,6 +49,13 @@ class Service(ABCService):
 	@query.setter
 	def query(self, other):
 		self._query = other
+
+	@property
+	def logs(self):
+		if self._logs is None or not self._logs.ready:
+			from .logs import Service as Logs
+			self._logs = self.manager.get[Logs]('logs')
+		return self._logs
 
 	@property
 	def name(self) -> str:
@@ -63,11 +73,14 @@ class Service(ABCService):
 		pass
 
 	def run(self, query_function: Callable):
+		self.logs.info("Running migrations", service="migrations")
 		self.query = query_function
 		self.ready = True
+		self.logs.info("Migrations completed successfully", service="migrations")
 		return True
 
 def setup(manager: Manager[ABCService], /):
+	require('logs')
 	return Service(manager)
 
 if TYPE_CHECKING:

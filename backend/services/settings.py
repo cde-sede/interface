@@ -1,10 +1,9 @@
-from typing import TYPE_CHECKING, cast, Any
+from typing import TYPE_CHECKING, cast, Any, TypedDict, NotRequired
 if TYPE_CHECKING:
 	from _injected import manager, require, validate_setup
 
 from ._base_service import ABCService
 from ._manager import Manager
-from .migrations import Service as Migrations
 import json
 import sqlite3
 
@@ -26,6 +25,16 @@ class _SettingsRegistry[U]:
 
 	def __getattr__(self, key) -> U:
 		return _SETTINGS.get(key, _SENTINEL)
+
+class SettingsSchema(TypedDict):
+	type: str
+	default: Any
+	description: str
+	valid_values: NotRequired[list[Any] | None]
+	options: NotRequired[dict[str, str] | None]
+	examples: NotRequired[dict[str, str] | None]
+
+
 
 
 class SettingDefinition:
@@ -49,7 +58,7 @@ class SettingDefinition:
 		default: Any,
 		description: str,
 		*,
-		valid_values: list[str] | None = None,
+		valid_values: list[Any] | None = None,
 		options: dict[str, str] | None = None,
 		examples: list[str] | None = None,
 		type_name: str = "string"
@@ -69,7 +78,7 @@ class SettingDefinition:
 			return self.default
 		return value
 
-	def to_schema_dict(self) -> dict:
+	def to_schema_dict(self) -> SettingsSchema:
 		"""Convert this definition to a schema dictionary entry."""
 		schema = {
 			"type": self.type_name,
@@ -210,6 +219,76 @@ SETTINGS_DEFINITIONS = [
 		},
 		type_name="boolean"
 	),
+	SettingDefinition(
+		key="log_level",
+		default="INFO",
+		description="Logging level for the application",
+		valid_values=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+		options={
+			"DEBUG": "Show all log messages including debug information",
+			"INFO": "Show informational messages and above",
+			"WARNING": "Show warnings, errors, and critical messages only",
+			"ERROR": "Show errors and critical messages only",
+			"CRITICAL": "Show only critical messages"
+		},
+		type_name="string"
+	),
+	SettingDefinition(
+		key="log_colors",
+		default=True,
+		description="Enable colored output in logs",
+		valid_values=[True, False],
+		options={
+			"true": "Enable ANSI color codes in log output",
+			"false": "Disable colors (useful for log files or non-TTY output)"
+		},
+		type_name="boolean"
+	),
+	SettingDefinition(
+		key="log_format",
+		default="pretty",
+		description="Log output format style",
+		valid_values=["pretty", "json", "simple"],
+		options={
+			"pretty": "Human-readable format with colors and structured data",
+			"json": "JSON format for machine parsing",
+			"simple": "Simple text format without extra formatting"
+		},
+		type_name="string"
+	),
+	SettingDefinition(
+		key="log_output",
+		default="stdout",
+		description="Where to output log messages",
+		valid_values=["stdout", "file", "both"],
+		options={
+			"stdout": "Output logs to standard output (console)",
+			"file": "Output logs to a file only",
+			"both": "Output logs to both console and file"
+		},
+		type_name="string"
+	),
+	SettingDefinition(
+		key="log_file_path",
+		default="logs/app.log",
+		description="Path to log file (used when log_output is 'file' or 'both')",
+		examples=["logs/app.log", "/var/log/myapp/app.log", "app.log"],
+		type_name="string"
+	),
+	SettingDefinition(
+		key="log_file_max_bytes",
+		default=10485760,
+		description="Maximum size of log file in bytes before rotation (10MB default)",
+		examples=[1048576, 10485760, 52428800],
+		type_name="integer"
+	),
+	SettingDefinition(
+		key="log_file_backup_count",
+		default=5,
+		description="Number of rotated log files to keep",
+		examples=[3, 5, 10],
+		type_name="integer"
+	),
 ]
 
 # Create a lookup dict for quick access
@@ -290,8 +369,36 @@ class Service(ABCService):
 	def socketio_enabled(self) -> bool:
 		return _SETTINGS_BY_KEY["socketio_enabled"].get_value(self.r[bool])
 
+	@property
+	def log_level(self) -> str:
+		return _SETTINGS_BY_KEY["log_level"].get_value(self.r[str])
+
+	@property
+	def log_colors(self) -> bool:
+		return _SETTINGS_BY_KEY["log_colors"].get_value(self.r[bool])
+
+	@property
+	def log_format(self) -> str:
+		return _SETTINGS_BY_KEY["log_format"].get_value(self.r[str])
+
+	@property
+	def log_output(self) -> str:
+		return _SETTINGS_BY_KEY["log_output"].get_value(self.r[str])
+
+	@property
+	def log_file_path(self) -> str:
+		return _SETTINGS_BY_KEY["log_file_path"].get_value(self.r[str])
+
+	@property
+	def log_file_max_bytes(self) -> int:
+		return _SETTINGS_BY_KEY["log_file_max_bytes"].get_value(self.r[int])
+
+	@property
+	def log_file_backup_count(self) -> int:
+		return _SETTINGS_BY_KEY["log_file_backup_count"].get_value(self.r[int])
+
 	@staticmethod
-	def get_default_settings() -> dict:
+	def get_default_settings() -> dict[str, Any]:
 		"""
 		Get the default settings dictionary.
 
@@ -301,7 +408,7 @@ class Service(ABCService):
 		return {s.key: s.default for s in SETTINGS_DEFINITIONS}
 
 	@staticmethod
-	def get_settings_schema() -> dict:
+	def get_settings_schema() -> dict[str, SettingsSchema]:
 		"""
 		Get the settings schema with documentation.
 

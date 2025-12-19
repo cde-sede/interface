@@ -43,8 +43,8 @@ export default function LogsPage({ logs, title, description }: LogsPageProps) {
 						</div>
 					))
 				) : (
-					<div className="empty-state">No logs available</div>
-				)}
+						<div className="empty-state">No logs available</div>
+					)}
 			</div>
 		</div>
 	);

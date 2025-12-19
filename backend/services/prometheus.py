@@ -1,6 +1,8 @@
-from typing import TYPE_CHECKING, Any, cast
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, cast, Optional
 if TYPE_CHECKING:
 	from _injected import manager, require, validate_setup
+	from .logs import Service as Logs
 
 from flask import Flask, request, g
 from prometheus_client import Counter, Histogram, Gauge, Info, generate_latest, REGISTRY, CollectorRegistry
@@ -67,9 +69,10 @@ class PrometheusMetricsService(NullPrometheus):
 	"""
 
 
-	def __init__(self):
+	def __init__(self, logs: Optional[Logs] = None):
 		self._ready = False
 		self._app = None
+		self._logs = logs
 
 		# Use custom registry to avoid conflicts if multiple instances exist
 		self.registry = CollectorRegistry()
@@ -110,6 +113,10 @@ class PrometheusMetricsService(NullPrometheus):
 			registry=self.registry
 		)
 
+	@property
+	def logs(self) -> Optional[Logs]:
+		return self._logs
+
 	def initialize(self, app: Flask):
 		"""
 		Initialize Prometheus metrics tracking with Flask app.
@@ -117,6 +124,10 @@ class PrometheusMetricsService(NullPrometheus):
 		Args:
 			app: Flask application instance
 		"""
+		if self._logs:
+			self._logs.info("Initializing Prometheus metrics service", service="prometheus",
+			               registry_type="custom")
+
 		self._app = app
 
 		# Set application metadata
@@ -134,6 +145,10 @@ class PrometheusMetricsService(NullPrometheus):
 		self._app.errorhandler(Exception)(self._handle_exception)
 
 		self._ready = True
+
+		if self._logs:
+			self._logs.info("Prometheus metrics service initialized successfully",
+			               service="prometheus")
 
 	def _before_request(self):
 		"""Track request start time and increment in-progress counter."""
@@ -227,9 +242,10 @@ class PrometheusMetricsServiceGlobal(NullPrometheus):
 	Simpler but may have conflicts if multiple metric collectors are registered.
 	"""
 
-	def __init__(self):
+	def __init__(self, logs: Optional[Logs] = None):
 		self._ready = False
 		self._app = None
+		self._logs = logs
 
 		# Use global registry
 		self.request_count = Counter(
@@ -259,6 +275,10 @@ class PrometheusMetricsServiceGlobal(NullPrometheus):
 
 		self.app_info = Info('flask_app', 'Flask application information')
 
+	@property
+	def logs(self) -> Optional[Logs]:
+		return self._logs
+
 	def initialize(self, app: Flask):
 		"""
 		Initialize Prometheus metrics tracking with Flask app.
@@ -266,6 +286,10 @@ class PrometheusMetricsServiceGlobal(NullPrometheus):
 		Args:
 			app: Flask application instance
 		"""
+		if self._logs:
+			self._logs.info("Initializing Prometheus metrics service", service="prometheus",
+			               registry_type="global")
+
 		self._app = app
 
 		# Set application metadata
@@ -281,6 +305,10 @@ class PrometheusMetricsServiceGlobal(NullPrometheus):
 		self._app.errorhandler(Exception)(self._handle_exception)
 
 		self._ready = True
+
+		if self._logs:
+			self._logs.info("Prometheus metrics service initialized successfully",
+			               service="prometheus")
 
 	def _before_request(self):
 		"""Track request start time and increment in-progress counter."""
@@ -326,11 +354,19 @@ class PrometheusMetricsServiceGlobal(NullPrometheus):
 
 
 def setup(manager: Manager[ABCService], /):
+	from .logs import Service as Logs
 	settings: Settings = cast(Settings, require('settings'))
+	logs_service = None
+	try:
+		require('logs')
+		logs_service = manager.get[Logs]('logs')
+	except:
+		pass
+
 	if settings.prometheus == 'global':
-		return PrometheusMetricsServiceGlobal()
+		return PrometheusMetricsServiceGlobal(logs=logs_service)
 	elif settings.prometheus == 'custom':
-		return PrometheusMetricsService()
+		return PrometheusMetricsService(logs=logs_service)
 	elif settings.prometheus == 'disabled':
 		return NullPrometheus()
 	raise ValueError("Invalid settings", settings.prometheus)

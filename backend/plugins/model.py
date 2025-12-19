@@ -16,6 +16,9 @@ class Plugin(ABCPlugin):
 		for i in specs:
 			self._models[i] = manager.get[ABCModel](i)
 
+	def all(self) -> tuple[ABCModel, ...]:
+		return tuple(self._models.values())
+
 	@property
 	def files(self) -> File:
 		return cast(File, self._models['models.files'])

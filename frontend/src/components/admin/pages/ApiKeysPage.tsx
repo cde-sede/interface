@@ -178,8 +178,8 @@ export default function ApiKeysPage({
 										{isExpired(key.expire) ? (
 											<span className="status-badge status-error">Expired</span>
 										) : (
-											<span className="status-badge status-ready">Active</span>
-										)}
+												<span className="status-badge status-ready">Active</span>
+											)}
 									</td>
 									<td className="text-muted">{formatDate(key.created_at)}</td>
 									<td className="text-muted">{formatDate(key.last_used)}</td>
@@ -201,11 +201,11 @@ export default function ApiKeysPage({
 					</table>
 				</div>
 			) : (
-				<div className="empty-state">
-					<p>No API keys found</p>
-					<p className="text-muted">Create an API key to get started with programmatic access</p>
-				</div>
-			)}
+					<div className="empty-state">
+						<p>No API keys found</p>
+						<p className="text-muted">Create an API key to get started with programmatic access</p>
+					</div>
+				)}
 
 			{/* Create API Key Modal */}
 			{showCreateModal && (
@@ -265,50 +265,50 @@ export default function ApiKeysPage({
 								</div>
 							</div>
 						) : (
-							/* Show the creation form */
-							<div className="modal-body">
-								<form onSubmit={handleCreateKey}>
-									<div className="form-group">
-										<label>Access Level</label>
-										<select name="level" required defaultValue="0">
-											{levels?.map((level) => (
-												<option key={level.value} value={level.value}>
-													{level.label} - {level.description}
-												</option>
-											))}
-										</select>
-									</div>
+								/* Show the creation form */
+								<div className="modal-body">
+									<form onSubmit={handleCreateKey}>
+										<div className="form-group">
+											<label>Access Level</label>
+											<select name="level" required defaultValue="0">
+												{levels?.map((level) => (
+													<option key={level.value} value={level.value}>
+														{level.label} - {level.description}
+													</option>
+												))}
+											</select>
+										</div>
 
-									<div className="form-group">
-										<label>Expiration Date (Optional)</label>
-										<input
-											type="datetime-local"
-											name="expire"
-											min={new Date().toISOString().slice(0, 16)}
-										/>
-										<p className="field-hint">Leave empty for no expiration</p>
-									</div>
+										<div className="form-group">
+											<label>Expiration Date (Optional)</label>
+											<input
+												type="datetime-local"
+												name="expire"
+												min={new Date().toISOString().slice(0, 16)}
+											/>
+											<p className="field-hint">Leave empty for no expiration</p>
+										</div>
 
-									<div className="form-actions">
-										<button
-											type="button"
-											className="action-button secondary"
-											onClick={closeCreateModal}
-											disabled={isCreating}
-										>
-											Cancel
-										</button>
-										<button
-											type="submit"
-											className="action-button"
-											disabled={isCreating}
-										>
-											{isCreating ? 'Creating...' : 'Create Key'}
-										</button>
-									</div>
-								</form>
-							</div>
-						)}
+										<div className="form-actions">
+											<button
+												type="button"
+												className="action-button secondary"
+												onClick={closeCreateModal}
+												disabled={isCreating}
+											>
+												Cancel
+											</button>
+											<button
+												type="submit"
+												className="action-button"
+												disabled={isCreating}
+											>
+												{isCreating ? 'Creating...' : 'Create Key'}
+											</button>
+										</div>
+									</form>
+								</div>
+							)}
 					</div>
 				</div>
 			)}

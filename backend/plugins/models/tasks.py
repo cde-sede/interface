@@ -205,15 +205,19 @@ class Task(ABCModel):
 				for row in rows
 			]
 
-	def delete(self, task_id: int) -> None:
+	def delete(self, task_id: int) -> bool:
 		"""
 		Delete task record.
 
 		Args:
 			task_id: Task ID to delete
+
+		Returns:
+			bool: True if deletion was successful, False otherwise
 		"""
 		with self.db() as db:
 			db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+			return db.rowcount > 0
 
 	def cleanup(self, older_than_days: int = 7) -> int:
 		"""
@@ -235,6 +239,58 @@ class Task(ABCModel):
 			""", (Task.TaskStatus.COMPLETED, Task.TaskStatus.FAILED, Task.TaskStatus.TIMEOUT, cutoff))
 
 			return cursor.rowcount
+
+	def get_all(self, limit: int = 50, offset: int = 0) -> list[dict]:
+		"""Get all tasks with pagination"""
+		with self.db() as db:
+			cursor = db.execute("""
+				SELECT id, name, status, priority, timeout, params, result,
+					   error, traceback, created_at, started_at, completed_at, worker_id
+				FROM tasks
+				ORDER BY created_at DESC
+				LIMIT ? OFFSET ?
+			""", (limit, offset))
+
+			rows = cursor.fetchall()
+			return [
+				{
+					'id': row[0],
+					'name': row[1],
+					'status': row[2],
+					'priority': row[3],
+					'timeout': row[4],
+					'params': row[5],
+					'result': row[6],
+					'error': row[7],
+					'traceback': row[8],
+					'created_at': row[9],
+					'started_at': row[10],
+					'completed_at': row[11],
+					'worker_id': row[12]
+				}
+				for row in rows
+			]
+
+	def get_count(self) -> int:
+		"""Get total count of tasks"""
+		with self.db() as db:
+			cursor = db.execute("SELECT COUNT(*) FROM tasks")
+			result = cursor.fetchone()
+			return result[0] if result else 0
+
+	def get_column_definitions(self) -> list[dict]:
+		"""Get column definitions for admin UI"""
+		return [
+			{"key": "id", "label": "ID", "type": "number", "sortable": True, "truncate": False},
+			{"key": "name", "label": "Name", "type": "text", "sortable": True, "truncate": True},
+			{"key": "status", "label": "Status", "type": "status", "sortable": True, "truncate": False},
+			{"key": "priority", "label": "Priority", "type": "number", "sortable": True, "truncate": False},
+			{"key": "timeout", "label": "Timeout", "type": "number", "sortable": True, "truncate": False},
+			{"key": "created_at", "label": "Created", "type": "date", "sortable": True, "truncate": False},
+			{"key": "started_at", "label": "Started", "type": "date", "sortable": True, "truncate": False},
+			{"key": "completed_at", "label": "Completed", "type": "date", "sortable": True, "truncate": False},
+			{"key": "worker_id", "label": "Worker", "type": "text", "sortable": True, "truncate": True},
+		]
 
 
 def setup(manager: 'Manager[ABCPlugin]', /):
