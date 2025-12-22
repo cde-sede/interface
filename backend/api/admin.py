@@ -55,6 +55,7 @@ class API(ABCApi):
 		self._logs = None
 
 		self.add_rules(self.bp)
+		self._register_socketio_handlers()
 
 	@property
 	def logs(self) -> Logs:
@@ -63,6 +64,69 @@ class API(ABCApi):
 			services_manager = self.manager.get[Manager[ABCService]]("services")
 			self._logs = services_manager.get[Logs]("logs")
 		return self._logs
+
+	def _register_socketio_handlers(self):
+		"""Register Socket.IO event handlers for admin page auto-reload."""
+		from ..services.socketio import Service as SocketIOService
+		from flask_socketio import join_room, leave_room
+		from flask import request as flask_request
+
+		services_manager = self.manager.get[Manager[ABCService]]("services")
+		socketio = services_manager.get[SocketIOService]("socketio")
+
+		@socketio.on('join_page')
+		def handle_join_page(data):
+			"""Handle client joining a page room for auto-reload."""
+			try:
+				page = data.get('page')
+				if not page:
+					self.logs.warning("Join page request missing page name", service="admin",
+					                session_id=flask_request.sid)
+					return
+
+				session_id = flask_request.sid
+				room_name = f"page_{page}"
+
+				join_room(room_name)
+
+				# Track current page in session
+				if hasattr(socketio, '_sessions_lock') and hasattr(socketio, '_sessions'):
+					with socketio._sessions_lock:
+						if session_id in socketio._sessions:
+							socketio._sessions[session_id]['current_page'] = page
+
+				self.logs.debug("Client joined page room", service="admin",
+				              session_id=session_id, page=page, room=room_name)
+			except Exception as e:
+				self.logs.error("Error joining page room", service="admin",
+				              error=str(e), session_id=flask_request.sid)
+
+		@socketio.on('leave_page')
+		def handle_leave_page(data):
+			"""Handle client leaving a page room."""
+			try:
+				page = data.get('page')
+				if not page:
+					self.logs.warning("Leave page request missing page name", service="admin",
+					                session_id=flask_request.sid)
+					return
+
+				session_id = flask_request.sid
+				room_name = f"page_{page}"
+
+				leave_room(room_name)
+
+				# Clear current page from session
+				if hasattr(socketio, '_sessions_lock') and hasattr(socketio, '_sessions'):
+					with socketio._sessions_lock:
+						if session_id in socketio._sessions:
+							socketio._sessions[session_id].pop('current_page', None)
+
+				self.logs.debug("Client left page room", service="admin",
+				              session_id=session_id, page=page, room=room_name)
+			except Exception as e:
+				self.logs.error("Error leaving page room", service="admin",
+				              error=str(e), session_id=flask_request.sid)
 
 	def _get_status_description(self, status_code: int) -> str:
 		"""Get human-readable description for HTTP status code"""
@@ -136,46 +200,39 @@ class API(ABCApi):
 				services.append({"name": service.name, "ready": service.ready})
 			except:
 				services.append({"name": service_name, "ready": False})
-
-		# Build DSL
-		page = PageBuilder(
-			title="System Overview",
-			description="Monitor system health and status"
+		return jsonify(
+			PageBuilder(
+				title="System Overview",
+				description="Monitor system health and status"
+			).add_section(
+				SectionBuilder()
+				.add_stats_cards([
+					create_stat_card(
+						"Services Running",
+						sum(1 for s in services if s["ready"]),
+						total=len(services)
+					),
+					create_stat_card(
+						"APIs Loaded",
+						len(list(self.manager.list_plugins()))
+					)
+				], columns=2)
+			).add_section(
+				SectionBuilder("Services")
+				.add_table(
+					TableBuilder(services)
+					.add_column("name", "Service", type="code")\
+					.add_status_column(
+						"ready",
+						"Status",
+						config={
+							"true": {"label": "Ready", "variant": "success"},
+							"false": {"label": "Not Ready", "variant": "error"}
+						}
+					)
+				)
+			).build()
 		)
-
-		# Stats section
-		stats_section = SectionBuilder()
-		stats_section.add_stats_cards([
-			create_stat_card(
-				"Services Running",
-				sum(1 for s in services if s["ready"]),
-				total=len(services)
-			),
-			create_stat_card(
-				"APIs Loaded",
-				len(list(self.manager.list_plugins()))
-			)
-		], columns=2)
-
-		page.add_section(stats_section)
-
-		# Services table section
-		services_section = SectionBuilder("Services")
-		table = TableBuilder(services)
-		table.add_column("name", "Service", type="code")
-		table.add_status_column(
-			"ready",
-			"Status",
-			config={
-				"true": {"label": "Ready", "variant": "success"},
-				"false": {"label": "Not Ready", "variant": "error"}
-			}
-		)
-
-		services_section.add_table(table)
-		page.add_section(services_section)
-
-		return jsonify(page.build())
 
 	@register("/services", methods=["GET"])
 	@describe("Get services status", "route")
@@ -199,81 +256,65 @@ class API(ABCApi):
 					"error": str(e),
 					"module_path": service_name
 				})
-
 		# Build DSL
-		page = PageBuilder(
-			title="Services Status",
-			description="Manage and monitor backend services"
-		)
+		return jsonify(
+			PageBuilder(
+				title="Services Status",
+				description="Manage and monitor backend services"
+			).add_section(SectionBuilder()
+				.add_table(
+					TableBuilder(services)
+					.add_column("name", "Name", type="code")
+					.add_column("type", "Type")
+					.add_status_column(
+						"ready",
+						"Status",
+						config={
+							"true": {"label": "Ready", "variant": "success"},
+							"false": {"label": "Not Ready", "variant": "error"}
+						}
+					)
 
-		# Services table
-		section = SectionBuilder()
-		table = TableBuilder(services)
+					.add_header_action(
+						"reload_all",
+						"Reload All Services",
+						ActionBuilder().api_call(
+							"/admin/reload",
+							method="POST",
+							body={"target": ValueRefBuilder.literal("services")}
+						).on_success(
+							message="Services reloaded successfully",
+							action=ActionBuilder().refresh()
+						),
+						confirm_message="Reload all services? This may cause temporary disruption."
+					)
 
-		# Columns
-		table.add_column("name", "Name", type="code")
-		table.add_column("type", "Type")
-		table.add_status_column(
-			"ready",
-			"Status",
-			config={
-				"true": {"label": "Ready", "variant": "success"},
-				"false": {"label": "Not Ready", "variant": "error"}
-			}
-		)
-
-		# Header action: Reload All Services
-		reload_all_action = ActionBuilder()
-		reload_all_action.api_call(
-			"/admin/reload",
-			method="POST",
-			body={"target": ValueRefBuilder.literal("services")}
-		).on_success(
-			message="Services reloaded successfully",
-			action=ActionBuilder().refresh()
-		)
-		table.add_header_action(
-			"reload_all",
-			"Reload All Services",
-			reload_all_action,
-			confirm_message="Reload all services? This may cause temporary disruption."
-		)
-
-		# Row action: Reload individual service
-		reload_action = ActionBuilder()
-		reload_action.api_call(
-			"/admin/reload",
-			method="POST",
-			body={"target": ValueRefBuilder.field("row", "module_path")}
-		).on_success(
-			message="Service reloaded",
-			action=ActionBuilder().refresh()
-		)
-
-		table.add_row_action(
-			"reload",
-			"Reload",
-			reload_action,
-			confirm_message=ValueRefBuilder.computed(
-				"Reload service {name}?",
-				name=ValueRefBuilder.field("row", "name")
-			)
-		)
-
-		section.add_table(table)
-		page.add_section(section)
-
-		# Add real-time updates
-		page.set_realtime(
-			socket_events=[
-				SocketEventHandler(
-					event="refresh_page",
-					handler="refresh-page"
+					.add_row_action(
+						"reload",
+						"Reload",
+						ActionBuilder().api_call(
+							"/admin/reload",
+							method="POST",
+							body={"target": ValueRefBuilder.field("row", "module_path")}
+						).on_success(
+							message="Service reloaded",
+							action=ActionBuilder().refresh()
+						),
+						confirm_message=ValueRefBuilder.computed(
+							"Reload service {name}?",
+							name=ValueRefBuilder.field("row", "name")
+						)
+					)
 				)
-			]
+			).set_realtime(
+				socket_events=[
+					SocketEventHandler(
+						event="refresh_page",
+						handler="refresh-page"
+					)
+				]
+			).build()
 		)
-
-		return jsonify(page.build())
 
 	@register("/tasks", methods=["GET", "POST"])
 	@describe("Get tasks or create new task", "route")
@@ -349,170 +390,140 @@ class API(ABCApi):
 
 			registered_tasks = list(tasks_service._registry.keys())
 
-			# Build DSL
-			page = PageBuilder(
-				title="Tasks System",
-				description="Background task execution management"
-			)
-
-			# Status info grid
-			status_section = SectionBuilder("System Status")
-			status_section.add_info_grid([
-				create_info_item("Workers Enabled", "Yes" if tasks_service.workers_enabled else "No"),
-				create_info_item("Worker Count", tasks_service._worker_count),
-				create_info_item("Paused", "Yes" if tasks_service.is_paused else "No", type="status"),
-				create_info_item("Running Tasks", len(running))
-			], columns=4)
-			page.add_section(status_section)
-
-			# Tasks table
-			tasks_section = SectionBuilder("Tasks")
-			table = TableBuilder(all_tasks)
-
-			# Columns
-			table.add_column("id", "ID", type="number", width="80px")
-			table.add_column("name", "Task Name", type="code")
-			table.add_status_column(
-				"status",
-				"Status",
-				config={
-					"PENDING": {"label": "Pending", "variant": "info"},
-					"RUNNING": {"label": "Running", "variant": "warning"},
-					"COMPLETED": {"label": "Completed", "variant": "success"},
-					"FAILED": {"label": "Failed", "variant": "error"},
-					"TIMEOUT": {"label": "Timeout", "variant": "error"}
-				}
-			)
-			table.add_column("created_at", "Created", type="date")
-			table.add_column("priority", "Priority", type="number", width="100px")
-
-			# Header actions
-			pause_action = ActionBuilder()
-			pause_action.api_call("/api/v1/tasks/system/pause", method="POST").on_success(
-				message="System paused",
-				action=ActionBuilder().refresh()
-			)
-			table.add_header_action("pause", "Pause System", pause_action)
-
-			resume_action = ActionBuilder()
-			resume_action.api_call("/api/v1/tasks/system/resume", method="POST").on_success(
-				message="System resumed",
-				action=ActionBuilder().refresh()
-			)
-			table.add_header_action("resume", "Resume System", resume_action)
-
-			cleanup_action = ActionBuilder()
-			cleanup_action.api_call("/api/v1/tasks/cleanup", method="POST").on_success(
-				message="Cleanup complete",
-				action=ActionBuilder().refresh()
-			)
-			table.add_header_action("cleanup", "Cleanup Old Tasks", cleanup_action)
-
-			create_task_action = ActionBuilder()
-			create_task_action.open_modal("create_task")
-			table.add_header_action("create", "Create Task", create_task_action)
-
-			# Row action: Requeue (conditional on PENDING status)
-			requeue_action = ActionBuilder()
-			requeue_action.api_call(
-				ValueRefBuilder.computed("/admin/tasks/{id}/requeue", id=ValueRefBuilder.field("row", "id")),
-				method="POST"
-			).on_success(
-				message="Task requeued",
-				action=ActionBuilder().refresh()
-			)
-			table.add_row_action(
-				"requeue",
-				"Requeue",
-				requeue_action,
-				confirm_message="Requeue this task?"
-			)
-
-			# Row click: Open task detail modal
-			table.on_row_click(
-				action="open-modal",
-				target="task_detail",
-				params={
-					"id": ValueRefBuilder.field("row", "id"),
-					"name": ValueRefBuilder.field("row", "name"),
-					"status": ValueRefBuilder.field("row", "status"),
-					"created_at": ValueRefBuilder.field("row", "created_at"),
-					"priority": ValueRefBuilder.field("row", "priority"),
-					"params": ValueRefBuilder.field("row", "params"),
-					"result": ValueRefBuilder.field("row", "result"),
-					"error": ValueRefBuilder.field("row", "error")
-				}
-			)
-
-			tasks_section.add_table(table)
-			page.add_section(tasks_section)
-
-			# Create Task modal
-			create_form = FormBuilder(
-				submit_action=ActionBuilder().api_call("/admin/tasks", method="POST", body={
-					"task_name": ValueRefBuilder.field("form", "task_name"),
-					"params": ValueRefBuilder.field("form", "params"),
-					"priority": ValueRefBuilder.field("form", "priority"),
-					"timeout": ValueRefBuilder.field("form", "timeout")
-				}).on_success(
-					message="Task created successfully",
-					action=ActionBuilder().close_modal("create_task").on_success(action=ActionBuilder().refresh())
+			return jsonify(
+				PageBuilder(
+					title="Tasks System",
+					description="Background task execution management"
+				).add_section(
+					SectionBuilder("System Status").add_info_grid([
+						create_info_item("Workers Enabled", "Yes" if tasks_service.workers_enabled else "No"),
+						create_info_item("Worker Count", tasks_service._worker_count),
+						create_info_item("Paused", "Yes" if tasks_service.is_paused else "No", type="status"),
+						create_info_item("Running Tasks", len(running))
+					], columns=4)
 				)
-			)
-
-			# Add task_name field as select with registered tasks
-			task_options = [FormFieldOption(value=task, label=task, description="") for task in registered_tasks]
-			create_form.add_select_field("task_name", "Task Name", task_options, required=True)
-			create_form.add_field("params", "Parameters (JSON)", type="textarea", placeholder='{"key": "value"}', helpText="JSON object with task parameters")
-			create_form.add_field("priority", "Priority", type="number", defaultValue=0)
-			create_form.add_field("timeout", "Timeout (seconds)", type="number", placeholder="Optional")
-			create_form.set_cancel_action(ActionBuilder().close_modal("create_task"))
-
-			page.add_modal("create_task", ModalDefinition(
-				title="Create New Task",
-				size="medium",
-				content=[create_form.build()],
-				closeOnOverlayClick=True
-			))
-
-			# Task Detail modal - add components directly without section wrapper
-			task_info = InfoGridComponent(
-				type="info-grid",
-				items=[
-					create_info_item("Task ID", ValueRefBuilder.field("data", "id")),
-					create_info_item("Task Name", ValueRefBuilder.field("data", "name"), type="code"),
-					create_info_item("Status", ValueRefBuilder.field("data", "status"), type="status"),
-					create_info_item("Priority", ValueRefBuilder.field("data", "priority")),
-					create_info_item("Created At", ValueRefBuilder.field("data", "created_at"), type="date")
-				],
-				columns=2
-			)
-
-			task_params = CodeBlockComponent(
-				type="code-block",
-				content=ValueRefBuilder.field("pageData", "params"),
-				language="json",
-				copyable=True
-			)
-
-			page.add_modal("task_detail", ModalDefinition(
-				title="Task Details",
-				size="large",
-				content=[task_info, task_params],
-				closeOnOverlayClick=True
-			))
-
-			# Add real-time updates
-			page.set_realtime(
-				socket_events=[
-					SocketEventHandler(
-						event="refresh_page",
-						handler="refresh-page"
+				.add_section(
+					SectionBuilder("Tasks").add_table(
+						TableBuilder(all_tasks)
+						.add_column("id", "ID", type="number", width="80px")
+						.add_column("name", "Task Name", type="code")
+						.add_status_column(
+							"status",
+							"Status",
+							config={
+								"PENDING": {"label": "Pending", "variant": "info"},
+								"RUNNING": {"label": "Running", "variant": "warning"},
+								"COMPLETED": {"label": "Completed", "variant": "success"},
+								"FAILED": {"label": "Failed", "variant": "error"},
+								"TIMEOUT": {"label": "Timeout", "variant": "error"}
+							}
+						)
+						.add_column("created_at", "Created", type="date")
+						.add_column("priority", "Priority", type="number", width="100px")
+						.add_header_action("pause", "Pause System", 
+							ActionBuilder().api_call("/api/v1/tasks/system/pause", method="POST").on_success(
+								message="System paused",
+								action=ActionBuilder().refresh()
+							)
+						)
+						.add_header_action("resume", "Resume System", 
+							ActionBuilder().api_call("/api/v1/tasks/system/resume", method="POST").on_success(
+								message="System resumed",
+								action=ActionBuilder().refresh()
+							)
+						)
+						.add_header_action("cleanup", "Cleanup Old Tasks", 
+							ActionBuilder().api_call("/api/v1/tasks/cleanup", method="POST").on_success(
+								message="Cleanup complete",
+								action=ActionBuilder().refresh()
+							)
+						)
+						.add_header_action("create", "Create Task", ActionBuilder().open_modal("create_task"))
+						.add_row_action(
+							"requeue",
+							"Requeue",
+							ActionBuilder().api_call(
+								ValueRefBuilder.computed("/admin/tasks/{id}/requeue", id=ValueRefBuilder.field("row", "id")),
+								method="POST"
+							).on_success(
+								message="Task requeued",
+								action=ActionBuilder().refresh()
+							),
+							confirm_message="Requeue this task?"
+						)
+						.on_row_click(
+							action="open-modal",
+							target="task_detail",
+							params={
+								"id": ValueRefBuilder.field("row", "id"),
+								"name": ValueRefBuilder.field("row", "name"),
+								"status": ValueRefBuilder.field("row", "status"),
+								"created_at": ValueRefBuilder.field("row", "created_at"),
+								"priority": ValueRefBuilder.field("row", "priority"),
+								"params": ValueRefBuilder.field("row", "params"),
+								"result": ValueRefBuilder.field("row", "result"),
+								"error": ValueRefBuilder.field("row", "error")
+							}
+						)
 					)
-				]
+				)
+				.add_modal("create_task", ModalDefinition(
+					title="Create New Task",
+					size="medium",
+					content=[
+						FormBuilder(
+							submit_action=ActionBuilder().api_call("/admin/tasks", method="POST", body={
+								"task_name": ValueRefBuilder.field("form", "task_name"),
+								"params": ValueRefBuilder.field("form", "params"),
+								"priority": ValueRefBuilder.field("form", "priority"),
+								"timeout": ValueRefBuilder.field("form", "timeout")
+							}).on_success(
+								message="Task created successfully",
+								action=ActionBuilder().close_modal("create_task").on_success(action=ActionBuilder().refresh())
+							)
+						)
+						.add_select_field("task_name", "Task Name", [FormFieldOption(value=task, label=task, description="") for task in registered_tasks], required=True)
+						.add_field("params", "Parameters (JSON)", type="textarea", placeholder='{"key": "value"}', helpText="JSON object with task parameters")
+						.add_field("priority", "Priority", type="number", defaultValue=0)
+						.add_field("timeout", "Timeout (seconds)", type="number", placeholder="Optional")
+						.set_cancel_action(ActionBuilder().close_modal("create_task"))
+					.build()],
+					closeOnOverlayClick=True
+				))
+				.add_modal("task_detail", ModalDefinition(
+					title="Task Details",
+					size="large",
+					content=[
+						InfoGridComponent(
+							type="info-grid",
+							items=[
+								create_info_item("Task ID", ValueRefBuilder.field("data", "id")),
+								create_info_item("Task Name", ValueRefBuilder.field("data", "name"), type="code"),
+								create_info_item("Status", ValueRefBuilder.field("data", "status"), type="status"),
+								create_info_item("Priority", ValueRefBuilder.field("data", "priority")),
+								create_info_item("Created At", ValueRefBuilder.field("data", "created_at"), type="date")
+							],
+							columns=2
+						), 
+						CodeBlockComponent(
+							type="code-block",
+							content=ValueRefBuilder.field("data", "params"),
+							language="json",
+							copyable=True
+						)
+					],
+					closeOnOverlayClick=True
+				))
+				.set_realtime(
+					socket_events=[
+						SocketEventHandler(
+							event="refresh_page",
+							handler="refresh-page"
+						)
+					]
+				).build()
 			)
 
-			return jsonify(page.build())
 		except Exception as e:
 			traceback.print_exc()
 			return jsonify({"title": "Tasks System", "error": f"Failed to get tasks: {str(e)}"})
@@ -1179,7 +1190,7 @@ class API(ABCApi):
 		services_manager = self.manager.get[Manager[ABCService]]("services")
 
 		# Get query parameters
-		limit = int(request.args.get('limit', -1))
+		limit = int(request.args.get('limit', 100))
 		level = request.args.get('level', None)
 
 		# Get logs from the logging service

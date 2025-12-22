@@ -51,19 +51,10 @@ class PrettyFormatter(logging.Formatter):
 	def format(self, record: logging.LogRecord) -> str:
 		"""Format log record with pretty colors and structure"""
 
-		# Get timestamp
 		timestamp = datetime.fromtimestamp(record.created).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-
-		# Get level name and color
 		level_name = record.levelname
-
-		# Get service/module name
 		service = getattr(record, 'service', record.name)
-
-		# Base message
 		message = record.getMessage()
-
-		# Handle structured data
 		extra_data = {}
 		for key, value in record.__dict__.items():
 			if key not in ['name', 'msg', 'args', 'created', 'filename', 'funcName',
@@ -71,35 +62,28 @@ class PrettyFormatter(logging.Formatter):
 			               'message', 'pathname', 'process', 'processName', 'relativeCreated',
 			               'thread', 'threadName', 'exc_info', 'exc_text', 'stack_info',
 			               'service']:
-				# Only include non-None values
 				if value is not None:
 					extra_data[key] = value
 
-		# Format based on style
 		if self.format_style == "json":
 			return self._format_json(timestamp, level_name, service, message, extra_data, record)
 		elif self.format_style == "simple":
 			return self._format_simple(timestamp, level_name, service, message, record)
-		else:  # pretty
+		else:
 			return self._format_pretty(timestamp, level_name, service, message, extra_data, record)
 
 	def _format_json(self, timestamp: str, level_name: str, service: str,
 	                 message: str, extra_data: dict, record: logging.LogRecord) -> str:
 		"""Format as JSON"""
-		log_data = {
-			'timestamp': timestamp,
-			'level': level_name,
-			'service': service,
-			'message': message
-		}
-
-		if extra_data:
-			log_data['data'] = extra_data
-
-		if record.exc_info:
-			log_data['exception'] = self.formatException(record.exc_info)
-
-		return json.dumps(log_data)
+		return json.dumps({
+				'timestamp': timestamp,
+				'level': level_name,
+				'service': service,
+				'message': message
+			}
+			|({'data': extra_data} if extra_data else {})
+			|({'exception': self.formatException(record.exc_info)} if record.exc_info else {})
+		)
 
 	def _format_simple(self, timestamp: str, level_name: str, service: str,
 	                   message: str, record: logging.LogRecord) -> str:
@@ -123,19 +107,14 @@ class PrettyFormatter(logging.Formatter):
 		else:
 			level_color = reset = bold = dim = ''
 
-		# Format level with fixed width
 		level_str = f"{level_color}{level_name:8s}{reset}"
 		service_str = f"{dim}[{service}]{reset}"
 
-		# Build the log line
 		parts = [f"{dim}{timestamp}{reset}", level_str, service_str, message]
 
-		# Add structured data inline if present and non-empty
 		if extra_data:
-			# Format as key=value pairs
 			data_parts = []
 			for key, value in extra_data.items():
-				# Format value appropriately
 				if isinstance(value, str):
 					formatted_value = f'"{value}"' if ' ' in value else value
 				else:
@@ -145,7 +124,6 @@ class PrettyFormatter(logging.Formatter):
 			if data_parts:
 				parts.append(f"{dim}({', '.join(data_parts)}){reset}")
 
-		# Add exception info if present (on new lines for readability)
 		if record.exc_info:
 			exc_text = self.formatException(record.exc_info)
 			parts.append(f"\n{level_color}{exc_text}{reset}")
@@ -163,26 +141,21 @@ class Service(ABCService):
 		self._ready = True
 		self._loggers: Dict[str, logging.Logger] = {}
 
-		# Runtime log file for admin page (always enabled)
 		self.runtime_log_file = "logs/runtime.log"
 		self._runtime_log_handler: Optional[logging.handlers.RotatingFileHandler] = None
 
-		# Track if we should broadcast updates
 		self._last_broadcast_time = 0
-		self._broadcast_cooldown = 2.0  # Broadcast at most every 2 seconds
+		self._broadcast_cooldown = 2.0
 
-		# Configure root logger
 		self._configure_root_logger()
 
 	def _configure_root_logger(self):
 		"""Configure the root logger with pretty formatter"""
 		root_logger = logging.getLogger()
 
-		# Remove existing handlers
 		for handler in root_logger.handlers[:]:
 			root_logger.removeHandler(handler)
 
-		# Get settings
 		log_level_str = self.settings.log_level
 		log_colors = self.settings.log_colors
 		log_format = self.settings.log_format
@@ -191,7 +164,6 @@ class Service(ABCService):
 		log_file_max_bytes = self.settings.log_file_max_bytes
 		log_file_backup_count = self.settings.log_file_backup_count
 
-		# Map string level to logging constant
 		log_level_map = {
 			'DEBUG': logging.DEBUG,
 			'INFO': logging.INFO,
@@ -200,18 +172,13 @@ class Service(ABCService):
 			'CRITICAL': logging.CRITICAL
 		}
 		log_level = log_level_map.get(log_level_str, logging.INFO)
-
-		# Set root logger level
 		root_logger.setLevel(log_level)
 
-		# Always add runtime log file handler for admin logs page
 		try:
-			# Create log directory if it doesn't exist
 			runtime_log_dir = os.path.dirname(self.runtime_log_file)
 			if runtime_log_dir and not os.path.exists(runtime_log_dir):
 				os.makedirs(runtime_log_dir, exist_ok=True)
 
-			# Create rotating file handler for runtime logs
 			self._runtime_log_handler = logging.handlers.RotatingFileHandler(
 				self.runtime_log_file,
 				maxBytes=10485760,  # 10MB
@@ -219,7 +186,6 @@ class Service(ABCService):
 				encoding='utf-8'
 			)
 
-			# Use simple format for easier parsing
 			self._runtime_log_handler.setFormatter(PrettyFormatter(
 				use_colors=False,
 				format_style="simple"
@@ -227,13 +193,9 @@ class Service(ABCService):
 			self._runtime_log_handler.setLevel(log_level)
 			root_logger.addHandler(self._runtime_log_handler)
 		except Exception:
-			# If runtime log handler fails, continue without it
 			pass
 
-		# Add stdout handler if needed
 		if log_output in ("stdout", "both"):
-			# Determine if colors should be used for console
-			# Use colors if: setting is enabled AND stdout is a TTY
 			use_colors = log_colors and sys.stdout.isatty()
 
 			console_handler = logging.StreamHandler(sys.stdout)
@@ -244,15 +206,12 @@ class Service(ABCService):
 			console_handler.setLevel(log_level)
 			root_logger.addHandler(console_handler)
 
-		# Add file handler if needed
 		if log_output in ("file", "both"):
 			try:
-				# Create log directory if it doesn't exist
 				log_dir = os.path.dirname(log_file_path)
 				if log_dir and not os.path.exists(log_dir):
 					os.makedirs(log_dir, exist_ok=True)
 
-				# Create rotating file handler
 				file_handler = logging.handlers.RotatingFileHandler(
 					log_file_path,
 					maxBytes=log_file_max_bytes,
@@ -260,7 +219,6 @@ class Service(ABCService):
 					encoding='utf-8'
 				)
 
-				# Files never use colors, even if colors are enabled
 				file_handler.setFormatter(PrettyFormatter(
 					use_colors=False,
 					format_style=log_format
@@ -269,7 +227,6 @@ class Service(ABCService):
 				root_logger.addHandler(file_handler)
 
 			except (OSError, PermissionError) as e:
-				# If file handler fails, log to stderr as fallback
 				fallback_handler = logging.StreamHandler(sys.stderr)
 				fallback_handler.setFormatter(PrettyFormatter(
 					use_colors=False,
@@ -292,7 +249,6 @@ class Service(ABCService):
 				from .socketio import Service as SocketIO
 				self._socketio = self.manager.get[SocketIO]('socketio')
 			except:
-				# SocketIO not available, return null implementation
 				from .socketio import NullSocketIO
 				self._socketio = NullSocketIO()
 		return self._socketio
@@ -319,7 +275,6 @@ class Service(ABCService):
 		extra.update(kwargs)
 		logger.log(level.value, message, extra=extra)
 
-		# Broadcast log update to connected clients (with cooldown)
 		self._maybe_broadcast_update(level)
 
 	def debug(self, message: str, service: str = "app", **kwargs):
@@ -357,12 +312,10 @@ class Service(ABCService):
 			if not os.path.exists(self.runtime_log_file):
 				return logs
 
-			# Read the log file
 			with open(self.runtime_log_file, 'r', encoding='utf-8') as f:
 				lines = f.readlines()
 
-			# Parse log lines (format: "timestamp LEVEL [service] message")
-			# Pattern: timestamp level [service] message
+			# Pattern: timestamp LEVEL [service] message
 			log_pattern = re.compile(r'^(\S+\s+\S+)\s+(\w+)\s+\[([^\]]+)\]\s+(.+)$')
 
 			for line in lines:
@@ -374,7 +327,6 @@ class Service(ABCService):
 				if match:
 					timestamp_str, log_level, logger_name, message = match.groups()
 
-					# Filter by level if specified
 					if level:
 						level_num = getattr(logging, level.upper(), logging.INFO)
 						log_level_num = getattr(logging, log_level.upper(), logging.INFO)
@@ -388,10 +340,8 @@ class Service(ABCService):
 						'message': message
 					})
 
-			# Return most recent logs first
 			logs.reverse()
 
-			# Apply limit
 			if limit:
 				logs = logs[:limit]
 
@@ -420,9 +370,6 @@ class Service(ABCService):
 		"""Broadcast log update via Socket.IO with cooldown to avoid spam"""
 		current_time = time.time()
 
-		# Only broadcast if:
-		# 1. Enough time has passed since last broadcast (cooldown)
-		# 2. OR it's an ERROR/CRITICAL level (always broadcast important logs)
 		should_broadcast = (
 			(current_time - self._last_broadcast_time) >= self._broadcast_cooldown or
 			level.value >= logging.ERROR
@@ -431,16 +378,13 @@ class Service(ABCService):
 		if should_broadcast:
 			self._last_broadcast_time = current_time
 			try:
-				# Broadcast only to users on the logs page
 				self.socketio.broadcast_to_page('logs', 'refresh_page', {'page': 'logs'})
 			except Exception:
-				# SocketIO not available or failed, ignore
 				pass
 
 
 def setup(manager: Manager[ABCService], /):
 	require("settings")
-	# SocketIO is optional - service will work without it
 	return Service(manager)
 
 if TYPE_CHECKING:

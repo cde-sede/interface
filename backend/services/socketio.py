@@ -30,7 +30,7 @@ class Service(ABCService):
 		self._handlers: Dict[str, Dict[str, Any]] = {}
 		self._handler_lock = threading.Lock()
 
-		self.app: Optional[Flask] = None
+		self.app: Flask = None # pyright: ignore
 		self.sio: Optional[SocketIO] = None
 
 		self._sessions: Dict[str, Dict[str, Any]] = {}
@@ -71,20 +71,38 @@ class Service(ABCService):
 		              cors_origins=self.settings.socketio_cors_origins)
 
 		self.app = app
+
+		# Build Redis URL for cross-process messaging
+		redis_url = (
+			f"redis://"
+			f"{self.settings.redis_host}:"
+			f"{self.settings.redis_port}/"
+			f"{self.settings.redis_db}"
+		)
+		if self.settings.redis_password:
+			redis_url = (
+				f"redis://:{self.settings.redis_password}@"
+				f"{self.settings.redis_host}:"
+				f"{self.settings.redis_port}/"
+				f"{self.settings.redis_db}"
+			)
+
+		self.logs.info("Configuring Socket.IO with Redis message queue",
+		              service="socketio", redis_url=redis_url.replace(self.settings.redis_password or '', '***'))
+
 		self.sio = SocketIO(
 			app,
 			cors_allowed_origins=self.settings.socketio_cors_origins,
 			ping_timeout=self.settings.socketio_ping_timeout,
 			ping_interval=self.settings.socketio_ping_interval,
 			async_mode='threading',
+			message_queue=redis_url,  # Enable cross-process messaging
 			logger=False,
 			engineio_logger=False
 		)
 
 		self.sio.on_event('connect', self._handle_connect)
 		self.sio.on_event('disconnect', self._handle_disconnect)
-		self.sio.on_event('join_page', self._handle_join_page)
-		self.sio.on_event('leave_page', self._handle_leave_page)
 
 		self._register_all_handlers()
 
@@ -128,7 +146,7 @@ class Service(ABCService):
 			self.logs.error(f"Socket.IO connection error", service="socketio", error=str(e))
 			return False
 
-	def _handle_disconnect(self):
+	def _handle_disconnect(self, *args):
 		"""Cleanup session data and leave rooms."""
 		session_id = flask_request.sid
 
@@ -145,56 +163,6 @@ class Service(ABCService):
 		else:
 			self.logs.debug("Client disconnected", service="socketio",
 			               session_id=session_id)
-
-	def _handle_join_page(self, data: Dict[str, Any]):
-		"""Handle client joining a page room."""
-		try:
-			page = data.get('page')
-			if not page:
-				self.logs.warning("Join page request missing page name", service="socketio",
-				                session_id=flask_request.sid)
-				return
-
-			session_id = flask_request.sid
-			room_name = f"page_{page}"
-
-			join_room(room_name)
-
-			# Track current page in session
-			with self._sessions_lock:
-				if session_id in self._sessions:
-					self._sessions[session_id]['current_page'] = page
-
-			self.logs.debug("Client joined page room", service="socketio",
-			              session_id=session_id, page=page, room=room_name)
-		except Exception as e:
-			self.logs.error("Error joining page room", service="socketio",
-			              error=str(e), session_id=flask_request.sid)
-
-	def _handle_leave_page(self, data: Dict[str, Any]):
-		"""Handle client leaving a page room."""
-		try:
-			page = data.get('page')
-			if not page:
-				self.logs.warning("Leave page request missing page name", service="socketio",
-				                session_id=flask_request.sid)
-				return
-
-			session_id = flask_request.sid
-			room_name = f"page_{page}"
-
-			leave_room(room_name)
-
-			# Clear current page from session
-			with self._sessions_lock:
-				if session_id in self._sessions:
-					self._sessions[session_id].pop('current_page', None)
-
-			self.logs.debug("Client left page room", service="socketio",
-			              session_id=session_id, page=page, room=room_name)
-		except Exception as e:
-			self.logs.error("Error leaving page room", service="socketio",
-			              error=str(e), session_id=flask_request.sid)
 
 	def get_current_user(self) -> Optional[Dict[str, Any]]:
 		"""Get current user data from session."""

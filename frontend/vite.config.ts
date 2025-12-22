@@ -24,7 +24,11 @@ export default defineConfig(({ mode }) => ({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
-      // Only proxy /admin API endpoints, not the page itself
+      '/socket.io': {
+        target: 'http://localhost:5000',
+        ws: true,
+        changeOrigin: true,
+      },
       '^/admin/(?!$)': {
         target: 'http://localhost:5000',
         changeOrigin: true,

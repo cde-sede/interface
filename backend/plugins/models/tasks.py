@@ -3,6 +3,7 @@ Task model for background task execution system.
 """
 from typing import TYPE_CHECKING
 import time
+import json
 
 if TYPE_CHECKING:
 	from backend.manager import Manager
@@ -57,7 +58,10 @@ class Task(ABCModel):
 					created_at REAL NOT NULL,
 					started_at REAL,
 					completed_at REAL,
-					worker_id TEXT
+					worker_id TEXT,
+					is_async BOOLEAN DEFAULT 0,
+					module TEXT,
+					qualname TEXT
 				)
 			""")
 
@@ -72,7 +76,8 @@ class Task(ABCModel):
 				ON tasks(priority DESC, created_at ASC)
 			""")
 
-	def create(self, name: str, params: dict | None = None, priority: int = 0, timeout: float | None = None) -> int:
+	def create(self, name: str, params: dict | None = None, priority: int = 0, timeout: float | None = None,
+			   module: str | None = None, qualname: str | None = None, is_async: bool = False) -> int:
 		"""
 		Insert new task record.
 
@@ -81,6 +86,9 @@ class Task(ABCModel):
 			params: Task parameters (will be JSON serialized)
 			priority: Task priority (higher = more important)
 			timeout: Max execution time in seconds (None = no timeout)
+			module: Task function module path (for worker process import)
+			qualname: Task function qualified name (for worker process import)
+			is_async: Whether task function is async
 
 		Returns:
 			task_id: Database ID of created task
@@ -92,16 +100,16 @@ class Task(ABCModel):
 
 		with self.db() as db:
 			cursor = db.execute("""
-				INSERT INTO tasks (name, status, priority, timeout, params, created_at)
-				VALUES (?, ?, ?, ?, ?, ?)
-			""", (name, Task.TaskStatus.PENDING, priority, timeout, params_json, created_at))
+				INSERT INTO tasks (name, status, priority, timeout, params, created_at, module, qualname, is_async)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			""", (name, Task.TaskStatus.PENDING, priority, timeout, params_json, created_at, module, qualname, is_async))
 
 			assert cursor.lastrowid is not None
 			return cursor.lastrowid
 
 	def update(self, task_id: int, **kwargs) -> None:
 		"""
-		Update task fields.
+		Update task fields. Automatically JSON-serializes the 'result' field.
 
 		Args:
 			task_id: Task ID to update
@@ -109,6 +117,20 @@ class Task(ABCModel):
 		"""
 		if not kwargs:
 			return
+
+		# Handle result field - serialize to JSON if needed
+		if 'result' in kwargs and kwargs['result'] is not None:
+			result = kwargs['result']
+			if not isinstance(result, str):
+				try:
+					kwargs['result'] = json.dumps(result)
+				except (TypeError, ValueError) as e:
+					# Fallback: store error info for non-serializable objects
+					kwargs['result'] = json.dumps({
+						'_type': type(result).__name__,
+						'_value': str(result),
+						'_serialization_error': str(e)
+					})
 
 		# Build SET clause dynamically
 		set_parts = []
@@ -141,7 +163,8 @@ class Task(ABCModel):
 		with self.db() as db:
 			cursor = db.execute("""
 				SELECT id, name, status, priority, timeout, params, result,
-					   error, traceback, created_at, started_at, completed_at, worker_id
+					   error, traceback, created_at, started_at, completed_at, worker_id,
+					   is_async, module, qualname
 				FROM tasks
 				WHERE id = ?
 			""", (task_id,))
@@ -163,7 +186,10 @@ class Task(ABCModel):
 				'created_at': row[9],
 				'started_at': row[10],
 				'completed_at': row[11],
-				'worker_id': row[12]
+				'worker_id': row[12],
+				'is_async': bool(row[13]) if row[13] is not None else False,
+				'module': row[14],
+				'qualname': row[15]
 			}
 
 	def get_by_status(self, status: str) -> list[dict]:
