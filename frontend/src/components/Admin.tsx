@@ -48,6 +48,7 @@ export default function Admin() {
 	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 	const [menuRefreshTrigger, setMenuRefreshTrigger] = useState(0);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+	const [socket, setSocket] = useState<Socket | null>(null);
 
 	// Use ref to track current page for Socket.IO events
 	const selectedPageRef = useRef(selectedPage);
@@ -155,46 +156,53 @@ export default function Admin() {
 	// Socket.IO connection for real-time updates
 	// Keep connection persistent across page changes
 	useEffect(() => {
-		if (authError) return;
+		if (authError) {
+			setSocket(null);
+			return;
+		}
 
 		const token = localStorage.getItem('auth_token');
-		if (!token) return;
+		if (!token) {
+			setSocket(null);
+			return;
+		}
 
-		const socket: Socket = io({
+		const socketInstance: Socket = io({
 			auth: { token }
 		});
 
-		socket.on('connect', () => {
-			console.log('Socket.IO connected');
+		socketInstance.on('connect', () => {
+			console.log('[Socket.IO] Connected, joining page room:', selectedPageRef.current);
 			// Join the current page room on connect
 			if (selectedPageRef.current) {
-				socket.emit('join_page', { page: selectedPageRef.current });
+				socketInstance.emit('join_page', { page: selectedPageRef.current });
 			}
 		});
 
-		socket.on('refresh_page', (data: { page: string }) => {
-			console.log('Socket.IO refresh_page event:', data);
-			if (data.page === selectedPageRef.current) {
-				console.log('Refreshing current page:', selectedPageRef.current);
-				setRefreshCounter(prev => prev + 1);
-			}
-		});
-
-		socket.on('disconnect', (reason) => {
+		socketInstance.on('disconnect', (reason) => {
 			console.log('Socket.IO disconnected:', reason);
 		});
 
-		socket.on('connect_error', (error) => {
-			console.error('Socket.IO connection error:', error);
+		socketInstance.on('connect_error', (error) => {
+			console.error('[Socket.IO] Connection error:', error);
 		});
 
+		// Add catch-all listener for debugging
+		socketInstance.onAny((eventName, ...args) => {
+			console.log('[Socket.IO] Received ANY event:', eventName, args);
+		});
+
+		// Store socket in state for DSLRenderer to use
+		setSocket(socketInstance);
+
 		// Store socket in a ref for page change effect
-		(window as any).__adminSocket = socket;
+		(window as any).__adminSocket = socketInstance;
 
 		return () => {
 			console.log('Cleaning up Socket.IO connection');
-			socket.disconnect();
+			socketInstance.disconnect();
 			delete (window as any).__adminSocket;
+			setSocket(null);
 		};
 	}, [authError]);
 
@@ -204,7 +212,7 @@ export default function Admin() {
 		if (!socket || !socket.connected) return;
 
 		// Leave the previous page room and join the new one
-		console.log('Switching to page:', selectedPage);
+		console.log('[Socket.IO] Switching to page:', selectedPage);
 		socket.emit('leave_page', { page: selectedPageRef.current });
 		socket.emit('join_page', { page: selectedPage });
 	}, [selectedPage]);
@@ -304,6 +312,8 @@ export default function Admin() {
 			return (
 				<DSLRenderer
 					dsl={pageData as PageDSL}
+					socket={socket}
+					currentPage={selectedPage}
 					onShowToast={showToast}
 					onShowConfirm={showConfirm}
 					onNavigate={(page) => setSelectedPage(page)}

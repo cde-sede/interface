@@ -66,10 +66,13 @@ class WorkerContext:
 
     @property
     def socketio(self):
-        """Lazy-load socketio service."""
+        """Lazy-load socketio service for worker subprocess."""
         if self._socketio is None or not self._socketio.ready:
             from backend.services.socketio import Service as SocketIO
             self._socketio = self.service_manager.get[SocketIO]('socketio')
+            # Initialize for worker mode (emit-only, no Flask app)
+            if not self._socketio.ready:
+                self._socketio.initialize_worker()
         return self._socketio
 
     @property
@@ -209,7 +212,7 @@ def execute_task_in_subprocess(task_id: int, ctx: WorkerContext) -> None:
             completed_at=time.time()
         )
 
-        ctx.socketio.emit('task_update', {
+        ctx.socketio.broadcast_to_page('tasks', 'task_update', {
             'task_id': task_id,
             'status': 'timeout',
             'task_name': task_name
@@ -272,7 +275,7 @@ def execute_task_direct(task_id: int) -> None:
         worker_id=f"Worker-{os.getpid()}"
     )
 
-    ctx.socketio.emit('task_update', {
+    ctx.socketio.broadcast_to_page('tasks', 'task_update', {
         'task_id': task_id,
         'status': 'running',
         'task_name': task_name
@@ -296,7 +299,7 @@ def execute_task_direct(task_id: int) -> None:
             completed_at=time.time()
         )
 
-        ctx.socketio.emit('task_update', {
+        ctx.socketio.broadcast_to_page('tasks', 'task_update', {
             'task_id': task_id,
             'status': 'completed',
             'task_name': task_name,
@@ -323,7 +326,7 @@ def execute_task_direct(task_id: int) -> None:
             completed_at=time.time()
         )
 
-        ctx.socketio.emit('task_update', {
+        ctx.socketio.broadcast_to_page('tasks', 'task_update', {
             'task_id': task_id,
             'status': 'failed',
             'task_name': task_name,

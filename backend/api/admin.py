@@ -311,7 +311,11 @@ class API(ABCApi):
 					SocketEventHandler(
 						event="refresh_page",
 						handler="refresh-page"
-					)
+					),
+					SocketEventHandler(
+						event="task_update",
+						handler="refresh-page"
+					),
 				]
 			).build()
 		)
@@ -356,7 +360,7 @@ class API(ABCApi):
 					timeout=timeout
 				)
 				# Emit Socket.IO event to refresh tasks page
-				socketio.broadcast('refresh_page', {'page': 'tasks'})
+				socketio.broadcast_to_page('tasks', 'refresh_page', {})
 
 				return jsonify({"task_id": task_id, "message": "Task created successfully"})
 			except KeyError as e:
@@ -420,6 +424,7 @@ class API(ABCApi):
 						)
 						.add_column("created_at", "Created", type="date")
 						.add_column("priority", "Priority", type="number", width="100px")
+						.add_hidden_column("result")  # Hidden column for task result (available in modal)
 						.add_header_action("pause", "Pause System", 
 							ActionBuilder().api_call("/api/v1/tasks/system/pause", method="POST").on_success(
 								message="System paused",
@@ -504,10 +509,21 @@ class API(ABCApi):
 								create_info_item("Created At", ValueRefBuilder.field("data", "created_at"), type="date")
 							],
 							columns=2
-						), 
+						),
+						DividerComponent(type="divider", label="Parameters"),
 						CodeBlockComponent(
 							type="code-block",
 							content=ValueRefBuilder.field("data", "params"),
+							language="json",
+							copyable=True
+						),
+						DividerComponent(type="divider", label="Result"),
+						CodeBlockComponent(
+							type="code-block",
+							content=ValueRefBuilder.coalesce(
+								ValueRefBuilder.field("data", "result"),
+								ValueRefBuilder.literal("No result yet")
+							),
 							language="json",
 							copyable=True
 						)
@@ -518,6 +534,10 @@ class API(ABCApi):
 					socket_events=[
 						SocketEventHandler(
 							event="refresh_page",
+							handler="refresh-page"
+						),
+						SocketEventHandler(
+							event="task_update",
 							handler="refresh-page"
 						)
 					]
@@ -541,7 +561,7 @@ class API(ABCApi):
 
 			success = tasks_service.requeue(task_id)
 			if success:
-				socketio.broadcast('refresh_page', {'page': 'tasks'})
+				socketio.broadcast_to_page('tasks', 'refresh_page', {})
 				return jsonify({"message": f"Task {task_id} requeued successfully"})
 			else:
 				task = tasks_service.get_status(task_id)
@@ -1962,7 +1982,7 @@ class API(ABCApi):
 				api_key = auth_plugin.create_apikey(level=level, expire=expire)
 
 				# Emit Socket.IO event to refresh API keys page
-				socketio.broadcast('refresh_page', {'page': 'api-keys'})
+				socketio.broadcast_to_page('api-keys', 'refresh_page', {})
 
 				return jsonify({
 					"message": "API key created successfully",
@@ -2154,8 +2174,8 @@ class API(ABCApi):
 		try:
 			if target == "all":
 				results = reload_all(current_app)
-				socketio.broadcast('refresh_page', {'page': 'services'})
-				socketio.broadcast('refresh_page', {'page': 'overview'})
+				socketio.broadcast_to_page('services', 'refresh_page', {})
+				socketio.broadcast_to_page('overview', 'refresh_page', {})
 				return jsonify({
 					"message": "Full system reload completed",
 					"results": {
@@ -2166,7 +2186,7 @@ class API(ABCApi):
 				})
 			elif target == "services":
 				results = reload_all_services()
-				socketio.broadcast('refresh_page', {'page': 'services'})
+				socketio.broadcast_to_page('services', 'refresh_page', {})
 				return jsonify({
 					"message": f"Reloaded {len(results)} service(s)",
 					"reloaded": list(results.keys())
@@ -2213,7 +2233,7 @@ class API(ABCApi):
 
 				if reloaded:
 					if manager_name == "services":
-						socketio.broadcast('refresh_page', {'page': 'services'})
+						socketio.broadcast_to_page('services', 'refresh_page', {})
 					return jsonify({
 						"message": f"Reloaded {target} from {manager_name}",
 						"target": target,

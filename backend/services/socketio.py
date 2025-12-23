@@ -73,19 +73,7 @@ class Service(ABCService):
 		self.app = app
 
 		# Build Redis URL for cross-process messaging
-		redis_url = (
-			f"redis://"
-			f"{self.settings.redis_host}:"
-			f"{self.settings.redis_port}/"
-			f"{self.settings.redis_db}"
-		)
-		if self.settings.redis_password:
-			redis_url = (
-				f"redis://:{self.settings.redis_password}@"
-				f"{self.settings.redis_host}:"
-				f"{self.settings.redis_port}/"
-				f"{self.settings.redis_db}"
-			)
+		redis_url = self._build_redis_url()
 
 		self.logs.info("Configuring Socket.IO with Redis message queue",
 		              service="socketio", redis_url=redis_url.replace(self.settings.redis_password or '', '***'))
@@ -108,6 +96,41 @@ class Service(ABCService):
 
 		self._ready = True
 		self.logs.info("Socket.IO service initialized successfully", service="socketio")
+
+	def initialize_worker(self):
+		"""Initialize Socket.IO for worker subprocess (emit-only, no Flask app)."""
+		self.logs.info("Initializing Socket.IO for worker subprocess", service="socketio")
+
+		self.app = None
+
+		# Build Redis URL for cross-process messaging
+		redis_url = self._build_redis_url()
+
+		self.logs.info("Configuring Socket.IO with Redis message queue (worker mode)",
+		              service="socketio", redis_url=redis_url.replace(self.settings.redis_password or '', '***'))
+
+		# Create SocketIO instance without Flask app, just for emitting via Redis
+		self.sio = SocketIO(message_queue=redis_url, logger=False, engineio_logger=False)
+
+		self._ready = True
+		self.logs.info("Socket.IO service initialized for worker", service="socketio")
+
+	def _build_redis_url(self) -> str:
+		"""Build Redis URL for message queue."""
+		redis_url = (
+			f"redis://"
+			f"{self.settings.redis_host}:"
+			f"{self.settings.redis_port}/"
+			f"{self.settings.redis_db}"
+		)
+		if self.settings.redis_password:
+			redis_url = (
+				f"redis://:{self.settings.redis_password}@"
+				f"{self.settings.redis_host}:"
+				f"{self.settings.redis_port}/"
+				f"{self.settings.redis_db}"
+			)
+		return redis_url
 
 	def _handle_connect(self, auth):
 		"""Handle client connection with optional JWT authentication."""
@@ -228,7 +251,13 @@ class Service(ABCService):
 		if not self.sio:
 			return
 
-		with self.app.app_context():
+		# When using Redis message queue, emit works without Flask context
+		# This allows worker subprocesses to emit events
+		if self.app:
+			with self.app.app_context():
+				self.sio.emit(event, data, room=room, namespace=namespace)
+		else:
+			# Worker subprocess - emit directly (Redis handles cross-process)
 			self.sio.emit(event, data, room=room, namespace=namespace)
 
 	def emit_to_user(self, user_id: int, event: str, data: Any):

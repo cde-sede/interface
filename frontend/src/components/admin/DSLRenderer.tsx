@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import type { Socket } from 'socket.io-client';
 import type {
 	PageDSL,
 	ComponentDefinition,
@@ -13,6 +14,7 @@ import type {
 	LayoutComponent
 } from './dsl/types';
 import { ActionEngine, type ActionEngineCallbacks } from './dsl/actionEngine';
+import { useSocketEvents } from './hooks/useSocketEvents';
 import StatsCardsRenderer from './dsl/StatsCardsRenderer';
 import InfoGridRenderer from './dsl/InfoGridRenderer';
 import CodeBlockRenderer from './dsl/CodeBlockRenderer';
@@ -30,6 +32,8 @@ import './dsl/DSLComponents.css';
 
 interface DSLRendererProps {
 	dsl: PageDSL;
+	socket: Socket | null;
+	currentPage: string;
 	onShowToast: (message: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 	onShowConfirm: (message: string) => Promise<boolean>;
 	onNavigate: (page: string) => void;
@@ -38,6 +42,8 @@ interface DSLRendererProps {
 
 export default function DSLRenderer({
 	dsl,
+	socket,
+	currentPage,
 	onShowToast,
 	onShowConfirm,
 	onNavigate,
@@ -74,6 +80,15 @@ export default function DSLRenderer({
 
 	// Create action engine instance
 	const actionEngine = new ActionEngine(actionCallbacks);
+
+	// Set up Socket.IO event listeners based on DSL configuration
+	useSocketEvents({
+		socket,
+		realtimeConfig: dsl.realtime,
+		currentPage,
+		onRefresh,
+		onShowToast
+	});
 
 	// Render layout
 	const renderLayout = (layout: LayoutComponent) => {

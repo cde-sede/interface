@@ -166,13 +166,33 @@ class TableBuilder:
         key: str,
         label: str,
         type: Literal["text", "number", "date", "boolean", "status", "code"] = "text",
+        hidden: bool = False,
         **kwargs
     ) -> 'TableBuilder':
-        """Add a column to the table"""
+        """Add a column to the table
+
+        Args:
+            key: Column key (data field name)
+            label: Column label (display name)
+            type: Column type
+            hidden: If True, column is not displayed but data is available for actions/refs
+            **kwargs: Additional column properties
+        """
         column: ColumnDefinition = ColumnDefinition(key=key, label=label, type=type)
+        if hidden:
+            column["hidden"] = hidden
         column.update(kwargs)
         self.table["columns"].append(column)
         return self
+
+    def add_hidden_column(self, key: str, label: str = "") -> 'TableBuilder':
+        """Add a hidden column (data available for actions/refs but not displayed)
+
+        Args:
+            key: Column key (data field name)
+            label: Column label (optional, not displayed anyway)
+        """
+        return self.add_column(key, label or key, type="text", hidden=True)
 
     def add_status_column(
         self,

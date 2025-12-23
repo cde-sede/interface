@@ -121,6 +121,7 @@ class ColumnDefinition(TypedDict, total=False):
     format: ColumnFormat
     truncate: bool
     align: Literal["left", "center", "right"]
+    hidden: bool  # If true, column is not displayed but data is available for actions/refs
 
 
 class RowActionDefinition(TypedDict, total=False):

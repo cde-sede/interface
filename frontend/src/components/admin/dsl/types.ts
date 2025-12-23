@@ -86,6 +86,7 @@ export interface ColumnDefinition {
 	format?: ColumnFormat;
 	truncate?: boolean;  // Apply text-overflow ellipsis
 	align?: "left" | "center" | "right";  // Text alignment
+	hidden?: boolean;  // If true, column is not displayed but data is available for actions/refs
 }
 
 export interface RowActionDefinition {

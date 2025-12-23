@@ -20,10 +20,15 @@ class Downloader(ABCPlugin):
 
 		# Register the static method (no closure over self)
 		tasks.register(name="download", timeout=30.0)(self.download_task)
+		tasks.register(name="test", timeout=30.0)(self.test)
 
 	@property
 	def name(self) -> str:
 		return "downloader"
+
+	@staticmethod
+	def test(*a, **kw):
+		return "Lol"
 
 	@staticmethod
 	def download_task(url: str) -> dict:

@@ -26,6 +26,11 @@ export default function TableRenderer({ component, pageData, modalData, actionEn
 	const allData = resolveComponentData(component.data, pageData, modalData);
 	const columns: ColumnDefinition[] = resolveComponentData(component.columns, pageData, modalData) || component.columns;
 
+	// Filter visible columns (hidden columns are still in data for actions/refs)
+	const visibleColumns = useMemo(() => {
+		return columns.filter(col => !col.hidden);
+	}, [columns]);
+
 	// Determine pagination mode and settings
 	const paginationEnabled = pagination?.enabled ?? false;
 	const pageSize = pagination?.pageSize ?? 20;
@@ -283,7 +288,7 @@ export default function TableRenderer({ component, pageData, modalData, actionEn
 					<table className={`data-table ${density ? `table-${density}` : ''}`}>
 						<thead>
 							<tr>
-								{columns.map((column) => (
+								{visibleColumns.map((column) => (
 									<th
 										key={column.key}
 										style={{
@@ -304,7 +309,7 @@ export default function TableRenderer({ component, pageData, modalData, actionEn
 									onClick={() => handleRowClick(row)}
 									style={{ cursor: onRowClick ? 'pointer' : 'default' }}
 								>
-									{columns.map((column) => (
+									{visibleColumns.map((column) => (
 										<td
 											key={column.key}
 											style={{
