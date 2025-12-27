@@ -8,24 +8,21 @@ from werkzeug.routing import Rule
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
-def load_apis():
-	from .api import manager, ABCApi
-	for api in manager.list_plugins(): manager.load(api)
-
-	app.register_blueprint(manager.get[ABCApi]("api").blueprint)
-	app.register_blueprint(manager.get[ABCApi]("admin").blueprint)
-
 def load_services():
 	from .services import manager, ABCService
-	for service in manager.list_plugins(): manager.load(service)
+	services = []
+	for service in manager.list_plugins(): services.append(manager.load(service))
 
-	from .services.prometheus import NullPrometheus
-	from .services.metrics import NullMetrics
-	from .services.socketio import NullSocketIO
+	for service in services:
+		service.initialize(app)
 
-	manager.get[NullPrometheus]("prometheus").initialize(app)
-	manager.get[NullMetrics]("metrics").initialize(app)
-	manager.get[NullSocketIO]("socketio").initialize(app)
+def load_apis():
+	from .api import manager, ABCApi
+	apis = []
+	for api in manager.list_plugins(): apis.append(manager.load(api))
+
+	for api in apis:
+		app.register_blueprint(api.blueprint)
 
 def load_plugins():
 	from .plugins import manager
@@ -40,7 +37,8 @@ def shutdown_task_workers():
 	"""Gracefully shutdown task workers on app exit"""
 	try:
 		from .services import manager
-		tasks = manager.get("tasks")
+		from .services.tasks import Service as Tasks
+		tasks = manager.get[Tasks]("tasks")
 		if tasks and tasks.workers_enabled:
 			tasks._stop_workers()
 	except:

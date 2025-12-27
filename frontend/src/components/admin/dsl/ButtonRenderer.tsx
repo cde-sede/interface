@@ -1,18 +1,22 @@
 /**
  * Button Renderer
  *
- * Renders button component from DSL
+ * DSL adapter for Button library component.
+ * Handles action execution and confirmation dialogs.
  */
 
+import { startTransition } from 'react';
+import { Button } from '../../library/Button';
 import type { ButtonComponent } from './types';
-import { ActionEngine } from './actionEngine';
+import type { ActionEngine } from './actionEngine';
+import { ComponentWrapper } from './ComponentWrapper';
 import { resolveValue } from './valueResolver';
 
 interface ButtonRendererProps {
 	modalData?: any;
 	component: ButtonComponent;
 	pageData?: any;
-	actionEngine: ActionEngine;
+	actionEngine?: ActionEngine;
 	context?: any;
 }
 
@@ -30,28 +34,72 @@ export default function ButtonRenderer({
 		icon,
 		size = 'medium',
 		disabled = false,
-		confirmMessage
+		confirmMessage,
+		customStyle,
+		className: rawClassName
 	} = component;
 
-	const handleClick = async () => {
+	const resolverContext = { pageData, data: modalData };
+	const className = rawClassName ? resolveValue(rawClassName, resolverContext) : undefined;
+
+	const handleClick = () => {
+		if (!actionEngine) return;
+
 		const actionContext = { pageData, data: modalData, ...context };
 
-		if (confirmMessage) {
-			const message = resolveValue(confirmMessage, actionContext);
-			await actionEngine.executeWithConfirmation(action, message, actionContext);
-		} else {
-			await actionEngine.execute(action, actionContext);
-		}
+		startTransition(() => {
+			if (confirmMessage) {
+				const message = resolveValue(confirmMessage, actionContext);
+				actionEngine.executeWithConfirmation(action, message, actionContext);
+			} else {
+				actionEngine.execute(action, actionContext);
+			}
+		});
+	};
+
+	const buttonElement = (
+		<Button
+			label={label}
+			variant={variant}
+			size={size}
+			icon={icon}
+			disabled={disabled}
+			onClick={handleClick}
+			style={customStyle as React.CSSProperties}
+			className={className}
+		/>
+	);
+
+	// Only use ComponentWrapper if we have wrapper-level properties
+	const needsWrapper = Boolean(
+		actionEngine && (
+			component.events?.click ||
+			component.events?.hover ||
+			component.id ||
+			component.ariaLabel ||
+			component.ariaDescribedBy
+		)
+	);
+
+	if (!needsWrapper) {
+		return buttonElement;
+	}
+
+	// Create a component object without customStyle/className to avoid duplication
+	const wrapperComponent = {
+		...component,
+		customStyle: undefined,
+		className: undefined
 	};
 
 	return (
-		<button
-			className={`action-button ${variant} ${size}`}
-			onClick={handleClick}
-			disabled={disabled}
+		<ComponentWrapper
+			component={wrapperComponent}
+			pageData={pageData}
+			modalData={modalData}
+			actionEngine={actionEngine}
 		>
-			{icon && <span className="button-icon">{icon}</span>}
-			{label}
-		</button>
+			{buttonElement}
+		</ComponentWrapper>
 	);
 }

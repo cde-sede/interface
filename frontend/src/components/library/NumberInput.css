@@ -1,0 +1,103 @@
+/**
+ * NumberInput Component Styles
+ */
+
+.lib-number-input-wrapper {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+	width: 100%;
+	border: 1px solid var(--theme-card-border);
+	border-radius: 4px;
+	background-color: var(--theme-code-bg);
+	transition: border-color 0.2s ease;
+}
+
+.lib-number-input-wrapper:focus-within {
+	border-color: var(--theme-input-accent);
+}
+
+.lib-number-input-wrapper:hover:not(:focus-within) {
+	border-color: var(--theme-card-border-hover);
+}
+
+.lib-number-input-field {
+	flex: 1;
+	padding: 0.5rem;
+	border: none;
+	background-color: transparent;
+	color: var(--theme-main-text);
+	border-radius: 4px 0 0 4px;
+	font-size: 0.875rem;
+	font-family: inherit;
+	outline: none;
+}
+
+.lib-number-input-field:disabled,
+.lib-number-input-field:read-only {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.lib-number-input-wrapper:has(.lib-number-input-field:disabled),
+.lib-number-input-wrapper:has(.lib-number-input-field:read-only) {
+	background-color: var(--theme-sidebar-bg);
+	opacity: 0.6;
+}
+
+.lib-number-input-controls {
+	display: flex;
+	flex-direction: column;
+	width: 28px;
+	border-left: 1px solid var(--theme-card-border);
+}
+
+.lib-number-input-btn {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background-color: transparent;
+	color: var(--theme-main-text);
+	cursor: pointer;
+	font-size: 0.65rem;
+	line-height: 1;
+	padding: 0;
+	margin: 0;
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.lib-number-input-btn:hover:not(:disabled) {
+	background-color: var(--theme-sidebar-bg);
+	color: var(--theme-main-text);
+}
+
+.lib-number-input-btn:active:not(:disabled) {
+	background-color: var(--theme-card-border);
+}
+
+.lib-number-input-btn:disabled {
+	opacity: 0.3;
+	cursor: not-allowed;
+}
+
+.lib-number-input-increment {
+	border-radius: 0 4px 0 0;
+	border-bottom: 1px solid var(--theme-card-border);
+}
+
+.lib-number-input-decrement {
+	border-radius: 0 0 4px 0;
+}
+
+/* Remove focus outline from buttons */
+.lib-number-input-btn:focus,
+.lib-number-input-btn:focus-visible {
+	outline: none;
+}
+
+/* Error state */
+.lib-number-input-wrapper.lib-number-input-error {
+	border-color: #ef4444;
+}

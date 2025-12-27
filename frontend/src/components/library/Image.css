@@ -1,0 +1,39 @@
+/* Image */
+.lib-image-container {
+	width: 100%;
+	margin: 0.5rem 0;
+}
+
+.lib-image {
+	max-width: 100%;
+	height: auto;
+	display: block;
+}
+
+.lib-image-fit-cover {
+	object-fit: cover;
+}
+
+.lib-image-fit-contain {
+	object-fit: contain;
+}
+
+.lib-image-fit-fill {
+	object-fit: fill;
+}
+
+.lib-image-fit-none {
+	object-fit: none;
+}
+
+.lib-image-fit-scale-down {
+	object-fit: scale-down;
+}
+
+.lib-image-rounded {
+	border-radius: 0.5rem;
+}
+
+.lib-image-bordered {
+	border: 1px solid var(--theme-card-border);
+}

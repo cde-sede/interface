@@ -1,0 +1,49 @@
+/* Spacer */
+.lib-spacer {
+	flex-shrink: 0;
+}
+
+.lib-spacer-vertical.lib-spacer-xs {
+	height: 0.25rem;
+}
+
+.lib-spacer-vertical.lib-spacer-sm {
+	height: 0.5rem;
+}
+
+.lib-spacer-vertical.lib-spacer-md {
+	height: 1rem;
+}
+
+.lib-spacer-vertical.lib-spacer-lg {
+	height: 1.5rem;
+}
+
+.lib-spacer-vertical.lib-spacer-xl {
+	height: 2rem;
+}
+
+.lib-spacer-horizontal.lib-spacer-xs {
+	width: 0.25rem;
+	display: inline-block;
+}
+
+.lib-spacer-horizontal.lib-spacer-sm {
+	width: 0.5rem;
+	display: inline-block;
+}
+
+.lib-spacer-horizontal.lib-spacer-md {
+	width: 1rem;
+	display: inline-block;
+}
+
+.lib-spacer-horizontal.lib-spacer-lg {
+	width: 1.5rem;
+	display: inline-block;
+}
+
+.lib-spacer-horizontal.lib-spacer-xl {
+	width: 2rem;
+	display: inline-block;
+}

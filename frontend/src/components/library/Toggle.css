@@ -1,0 +1,92 @@
+.lib-toggle-container {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	margin: 0.5rem 0;
+}
+
+.lib-toggle {
+	position: relative;
+	display: inline-block;
+	cursor: pointer;
+}
+
+.lib-toggle-disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.lib-toggle-input {
+	display: none;
+}
+
+.lib-toggle-slider {
+	display: block;
+	width: 3rem;
+	height: 1.5rem;
+	background-color: var(--theme-card-border);
+	border-radius: 1.5rem;
+	position: relative;
+	transition: background-color 0.2s;
+}
+
+.lib-toggle-sm .lib-toggle-slider {
+	width: 2.5rem;
+	height: 1.25rem;
+}
+
+.lib-toggle-lg .lib-toggle-slider {
+	width: 3.5rem;
+	height: 1.75rem;
+}
+
+.lib-toggle-slider::before {
+	content: '';
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: calc(1.5rem - 4px);
+	height: calc(1.5rem - 4px);
+	background-color: white;
+	border-radius: 50%;
+	transition: transform 0.2s;
+}
+
+.lib-toggle-sm .lib-toggle-slider::before {
+	width: calc(1.25rem - 4px);
+	height: calc(1.25rem - 4px);
+}
+
+.lib-toggle-lg .lib-toggle-slider::before {
+	width: calc(1.75rem - 4px);
+	height: calc(1.75rem - 4px);
+}
+
+.lib-toggle-checked {
+	background-color: var(--theme-input-accent);
+}
+
+.lib-toggle-success.lib-toggle-checked {
+	background-color: #10b981;
+}
+
+.lib-toggle-error.lib-toggle-checked {
+	background-color: #ef4444;
+}
+
+.lib-toggle-checked::before {
+	transform: translateX(1.5rem);
+}
+
+.lib-toggle-sm .lib-toggle-checked::before {
+	transform: translateX(1.25rem);
+}
+
+.lib-toggle-lg .lib-toggle-checked::before {
+	transform: translateX(1.75rem);
+}
+
+.lib-toggle-label {
+	font-size: 0.875rem;
+	color: var(--theme-main-text);
+}

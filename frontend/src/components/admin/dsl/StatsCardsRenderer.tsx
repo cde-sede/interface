@@ -1,40 +1,66 @@
 /**
  * Stats Cards Renderer
  *
- * Renders stat cards component from DSL
+ * DSL adapter for StatsCards library component.
  */
 
+import { StatsCards } from '../../library/StatsCards';
 import type { StatsCardsComponent } from './types';
+import type { ActionEngine } from './actionEngine';
+import { ComponentWrapper } from './ComponentWrapper';
 
 interface StatsCardsRendererProps {
 	component: StatsCardsComponent;
+	pageData?: any;
+	modalData?: any;
+	actionEngine?: ActionEngine;
 }
 
-export default function StatsCardsRenderer({ component }: StatsCardsRendererProps) {
+export default function StatsCardsRenderer({ component, pageData, modalData, actionEngine }: StatsCardsRendererProps) {
 	const { stats, columns = 4 } = component;
 
-	if (!stats || stats.length === 0) {
-		return null;
+	const { customStyle, className: rawClassName } = component;
+	const className = rawClassName ? String(rawClassName) : undefined;
+
+	const statsCardsElement = (
+		<StatsCards
+			stats={stats || []}
+			columns={columns}
+			style={customStyle as React.CSSProperties}
+			className={className}
+		/>
+	);
+
+	// Only use ComponentWrapper if we have wrapper-level properties
+	const needsWrapper = Boolean(
+		actionEngine && (
+			component.events?.click ||
+			component.events?.hover ||
+			component.id ||
+			component.ariaLabel ||
+			component.ariaDescribedBy
+		)
+	);
+
+	if (!needsWrapper) {
+		return statsCardsElement;
 	}
 
+	// Create a component object without customStyle/className to avoid duplication
+	const wrapperComponent = {
+		...component,
+		customStyle: undefined,
+		className: undefined
+	};
+
 	return (
-		<div className="stats-grid" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
-			{stats.map((stat, index) => (
-				<div key={index} className="stat-card" style={{ borderColor: stat.color }}>
-					<div className="stat-label">{stat.label}</div>
-					<div className="stat-value">
-						{stat.value}
-						{stat.total !== undefined && (
-							<span className="stat-total"> / {stat.total}</span>
-						)}
-					</div>
-					{stat.trend && (
-						<div className={`stat-trend stat-trend-${stat.trend.direction}`}>
-							{stat.trend.direction === 'up' ? '↑' : '↓'} {stat.trend.value}
-						</div>
-					)}
-				</div>
-			))}
-		</div>
+		<ComponentWrapper
+			component={wrapperComponent}
+			pageData={pageData}
+			modalData={modalData}
+			actionEngine={actionEngine}
+		>
+			{statsCardsElement}
+		</ComponentWrapper>
 	);
 }

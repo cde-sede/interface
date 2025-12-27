@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, startTransition } from 'react';
 
 export interface ConfirmDialogProps {
 	message: string;
@@ -21,11 +21,15 @@ export default function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmD
 				if (e.key === 'Enter') {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					onConfirm();
+					startTransition(() => {
+						onConfirm();
+					});
 				} else if (e.key === 'Escape') {
 					e.preventDefault();
 					e.stopImmediatePropagation();
-					onCancel();
+					startTransition(() => {
+						onCancel();
+					});
 				}
 			}
 		};
@@ -44,10 +48,10 @@ export default function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmD
 					<p>{message}</p>
 				</div>
 				<div className="form-actions">
-					<button className="action-button secondary" onClick={onCancel}>
+					<button className="action-button secondary" onClick={() => startTransition(() => onCancel())}>
 						Cancel
 					</button>
-					<button className="action-button" onClick={onConfirm} autoFocus>
+					<button className="action-button" onClick={() => startTransition(() => onConfirm())} autoFocus>
 						Confirm
 					</button>
 				</div>

@@ -1,0 +1,58 @@
+/**
+ * StatsCards Component Styles
+ */
+
+.lib-stats-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 1rem;
+	margin-bottom: 2rem;
+}
+
+.lib-stat-card {
+	background: var(--theme-card-bg);
+	border: 1px solid var(--theme-card-border);
+	border-radius: 8px;
+	padding: 1.25rem;
+	transition: border-color 0.15s ease;
+}
+
+.lib-stat-card:hover {
+	border-color: var(--theme-card-border-hover);
+}
+
+.lib-stat-label {
+	font-size: 0.8125rem;
+	color: var(--theme-main-text-muted);
+	margin-bottom: 0.5rem;
+	text-transform: uppercase;
+	letter-spacing: 0.025em;
+	font-weight: 500;
+}
+
+.lib-stat-value {
+	font-size: 2rem;
+	font-weight: 700;
+	color: var(--theme-main-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.lib-stat-total {
+	font-size: 1.25rem;
+	color: var(--theme-main-text-muted);
+	margin-left: 0.25rem;
+}
+
+.lib-stat-trend {
+	font-size: 0.875rem;
+	font-weight: 600;
+	margin-top: 0.5rem;
+}
+
+.lib-stat-trend-up {
+	color: var(--theme-method-get-text);
+}
+
+.lib-stat-trend-down {
+	color: var(--theme-method-delete-text);
+}

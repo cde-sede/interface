@@ -1,0 +1,11 @@
+/**
+ * Grid Component Styles
+ */
+
+.lib-grid {
+	display: grid;
+}
+
+.lib-grid-item {
+	/* Grid items inherit their styling from parent grid */
+}

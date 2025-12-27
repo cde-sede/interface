@@ -1,0 +1,122 @@
+/**
+ * DataGrid Component Styles
+ */
+
+.lib-data-grid-container {
+	margin: 1rem 0;
+	overflow: hidden;
+}
+
+.lib-data-grid {
+	overflow-x: auto;
+	overflow-y: auto;
+}
+
+.lib-data-grid-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+}
+
+.lib-data-grid-header {
+	background-color: var(--theme-sidebar-item-bg-hover, rgba(0, 0, 0, 0.03));
+	position: sticky;
+	top: 0;
+	z-index: 10;
+}
+
+.lib-data-grid-cell {
+	padding: 0.75rem;
+	border-bottom: 1px solid var(--theme-card-border);
+	text-align: left;
+}
+
+.lib-data-grid-header .lib-data-grid-cell {
+	font-weight: 600;
+	color: var(--theme-main-text);
+}
+
+.lib-data-grid-select {
+	width: 3rem;
+	text-align: center;
+}
+
+.lib-data-grid-actions {
+	width: auto;
+	white-space: nowrap;
+}
+
+.lib-data-grid-row:hover {
+	background-color: var(--theme-sidebar-item-bg-hover, rgba(0, 0, 0, 0.02));
+}
+
+.lib-data-grid-row-selected {
+	background-color: rgba(59, 130, 246, 0.05);
+}
+
+.lib-data-grid-editable {
+	cursor: text;
+}
+
+.lib-data-grid-input {
+	width: 100%;
+	padding: 0.375rem;
+	border: 1px solid var(--theme-input-accent);
+	border-radius: 0.25rem;
+	font-size: 0.875rem;
+	outline: none;
+}
+
+.lib-data-grid-actions-buttons {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.lib-data-grid-action-button {
+	padding: 0.375rem 0.75rem;
+	background-color: var(--theme-input-accent);
+	color: white;
+	border: none;
+	border-radius: 0.25rem;
+	cursor: pointer;
+	font-size: 0.75rem;
+	transition: opacity 0.2s;
+}
+
+.lib-data-grid-action-button:hover {
+	opacity: 0.9;
+}
+
+.lib-data-grid-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 1rem;
+	margin-top: 1rem;
+	padding: 0.75rem;
+	border-top: 1px solid var(--theme-card-border);
+}
+
+.lib-data-grid-pagination-button {
+	padding: 0.5rem 1rem;
+	background-color: var(--theme-card-bg);
+	border: 1px solid var(--theme-card-border);
+	border-radius: 0.375rem;
+	cursor: pointer;
+	font-size: 0.875rem;
+	transition: all 0.2s;
+}
+
+.lib-data-grid-pagination-button:hover:not(:disabled) {
+	background-color: var(--theme-sidebar-item-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.lib-data-grid-pagination-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.lib-data-grid-pagination-info {
+	font-size: 0.875rem;
+	color: var(--theme-main-text-muted);
+}

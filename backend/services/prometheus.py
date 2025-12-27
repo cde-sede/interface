@@ -23,9 +23,6 @@ class NullPrometheus(ABCService):
 		self._ready = True
 		self.registry = CollectorRegistry()
 
-	def initialize(self, app: Flask):
-		pass
-
 	def _before_request(self):
 		pass
 

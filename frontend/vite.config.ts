@@ -33,6 +33,10 @@ export default defineConfig(({ mode }) => ({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      '^/content/(?!$)': {
+        target: 'http://localhost:5000',
+        changeOrigin: true,
+      },
     },
   },
 }))

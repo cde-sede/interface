@@ -1,15 +1,16 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import ApiDocs from './components/ApiDocs';
 import Admin from './components/Admin';
+import Home from './components/Home';
 import './App.css';
 
 function App() {
 	return (
 		<BrowserRouter>
 			<Routes>
+				<Route path="/" element={<Home />} />
 				<Route path="/docs" element={<ApiDocs />} />
 				<Route path="/admin" element={<Admin />} />
-				<Route path="/" element={<Navigate to="/docs" replace />} />
 			</Routes>
 		</BrowserRouter>
 	);

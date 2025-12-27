@@ -1,102 +1,76 @@
 /**
  * Info Grid Renderer
  *
- * Renders info grid component from DSL (key-value pairs)
+ * DSL adapter for InfoGrid library component.
  */
 
-import { useState } from 'react';
-import type { InfoGridComponent } from './types';
+import { InfoGrid } from '../../library/InfoGrid';
+import type { InfoGridComponent, InfoGridItem as DSLInfoGridItem } from './types';
+import type { ActionEngine } from './actionEngine';
+import { ComponentWrapper } from './ComponentWrapper';
 import { resolveValue } from './valueResolver';
 
 interface InfoGridRendererProps {
 	component: InfoGridComponent;
 	pageData?: any;
 	modalData?: any;
+	actionEngine?: ActionEngine;
 }
 
-export default function InfoGridRenderer({ component, pageData, modalData }: InfoGridRendererProps) {
-	const { items, columns = 4 } = component;
-	const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+export default function InfoGridRenderer({ component, pageData, modalData, actionEngine }: InfoGridRendererProps) {
+	const { items, columns } = component;
 
-	if (!items || items.length === 0) {
-		return null;
+	const infoGridItems = items.map((item: DSLInfoGridItem) => ({
+		label: item.label,
+		value: resolveValue(item.value, { pageData, data: modalData }),
+		type: item.type,
+		icon: item.icon,
+		copyable: item.copyable
+	}));
+
+	const { customStyle, className: rawClassName } = component;
+	const context = { pageData, data: modalData };
+	const className = rawClassName ? resolveValue(rawClassName, context) : undefined;
+
+	const infoGridElement = (
+		<InfoGrid
+			items={infoGridItems}
+			columns={columns}
+			style={customStyle as React.CSSProperties}
+			className={className}
+		/>
+	);
+
+	// Only use ComponentWrapper if we have wrapper-level properties
+	const needsWrapper = Boolean(
+		actionEngine && (
+			component.events?.click ||
+			component.events?.hover ||
+			component.id ||
+			component.ariaLabel ||
+			component.ariaDescribedBy
+		)
+	);
+
+	if (!needsWrapper) {
+		return infoGridElement;
 	}
 
-	const handleCopy = async (value: string, index: number) => {
-		try {
-			await navigator.clipboard.writeText(value);
-			setCopiedIndex(index);
-			setTimeout(() => setCopiedIndex(null), 2000);
-		} catch (err) {
-			console.error('Failed to copy:', err);
-		}
-	};
-
-	const renderValue = (item: typeof items[0], index: number) => {
-		// Resolve value if it's a ValueRef
-		const resolvedValue = resolveValue(item.value, { pageData, data: modalData });
-
-		const valueElement = (() => {
-			switch (item.type) {
-				case 'code':
-					return <code className="info-value-code">{String(resolvedValue)}</code>;
-				case 'status':
-					return <span className="status-badge">{String(resolvedValue)}</span>;
-				case 'date':
-					try {
-						// Handle different date formats: ISO string, Unix ms, or Unix seconds
-						let date: Date;
-
-						if (typeof resolvedValue === 'string') {
-							// ISO format string
-							date = new Date(resolvedValue);
-						} else if (typeof resolvedValue === 'number') {
-							// If number is too small, it's likely Unix seconds, convert to ms
-							const timestamp = resolvedValue < 10000000000 ? resolvedValue * 1000 : resolvedValue;
-							date = new Date(timestamp);
-						} else {
-							return <span>{String(resolvedValue)}</span>;
-						}
-
-						if (isNaN(date.getTime())) {
-							return <span>{String(resolvedValue)}</span>;
-						}
-
-						return <span>{date.toLocaleString()}</span>;
-					} catch {
-						return <span>{String(resolvedValue)}</span>;
-					}
-				default:
-					return <span>{String(resolvedValue)}</span>;
-			}
-		})();
-
-		const displayValue = String(resolvedValue);
-
-		return (
-			<div className="info-value">
-				{valueElement}
-				{item.copyable && (
-					<button
-						className="copy-button"
-						onClick={() => handleCopy(displayValue, index)}
-						title="Copy to clipboard"
-					>
-						{copiedIndex === index ? '✓' : '📋'}
-					</button>
-				)}
-			</div>
-		);
+	// Create a component object without customStyle/className to avoid duplication
+	const wrapperComponent = {
+		...component,
+		customStyle: undefined,
+		className: undefined
 	};
 
 	return (
-		<div className="info-grid" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
-			{items.map((item, index) => (
-				<div key={index} className="info-item">
-					<span className="info-label">{item.label}</span>
-					{renderValue(item, index)}
-				</div>
-			))}
-		</div>
+		<ComponentWrapper
+			component={wrapperComponent}
+			pageData={pageData}
+			modalData={modalData}
+			actionEngine={actionEngine}
+		>
+			{infoGridElement}
+		</ComponentWrapper>
 	);
 }

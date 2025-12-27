@@ -1,0 +1,86 @@
+/* Metric */
+.lib-metric {
+	background-color: var(--theme-card-bg);
+	border: 1px solid var(--theme-card-border);
+	border-radius: 0.5rem;
+	padding: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.lib-metric-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.lib-metric-label {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--theme-main-text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.025em;
+}
+
+.lib-metric-icon {
+	font-size: 1.25rem;
+	color: var(--theme-main-text-muted);
+}
+
+.lib-metric-value {
+	font-size: 2rem;
+	font-weight: 700;
+	color: var(--theme-main-text);
+	line-height: 1;
+}
+
+.lib-metric-unit {
+	font-size: 1rem;
+	font-weight: 400;
+	color: var(--theme-main-text-muted);
+	margin-left: 0.25rem;
+}
+
+.lib-metric-trend {
+	font-size: 0.875rem;
+	font-weight: 500;
+}
+
+.lib-metric-trend-up {
+	color: var(--theme-method-get-bg);
+}
+
+.lib-metric-trend-down {
+	color: var(--theme-method-delete-bg);
+}
+
+.lib-metric-trend-neutral {
+	color: var(--theme-main-text-muted);
+}
+
+.lib-metric-change {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.lib-metric-success {
+	border-color: var(--theme-method-get-bg);
+	border-width: 2px;
+}
+
+.lib-metric-error {
+	border-color: var(--theme-method-delete-bg);
+	border-width: 2px;
+}
+
+.lib-metric-warning {
+	border-color: #f59e0b;
+	border-width: 2px;
+}
+
+.lib-metric-info {
+	border-color: #3b82f6;
+	border-width: 2px;
+}

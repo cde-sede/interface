@@ -1,0 +1,121 @@
+.home-page {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	background-color: var(--theme-main-bg);
+	color: var(--theme-main-text);
+}
+
+.home-header {
+	background-color: var(--theme-header-bg);
+	border-bottom: 1px solid var(--theme-header-border);
+	padding: 1.5rem 2rem;
+}
+
+.home-header .header-content {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	max-width: 1400px;
+	margin: 0 auto;
+}
+
+.home-header .header-text h1 {
+	margin: 0;
+	font-size: 1.5rem;
+	font-weight: 600;
+	color: var(--theme-header-text);
+}
+
+.home-header .header-text p {
+	margin: 0.25rem 0 0 0;
+	font-size: 0.875rem;
+	color: var(--theme-header-text);
+	opacity: 0.7;
+}
+
+.home-header .header-actions {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+.home-header .login-button {
+	padding: 0.5rem 1rem;
+	background-color: var(--theme-button-primary-bg);
+	color: var(--theme-button-primary-text);
+	border: none;
+	border-radius: 0.375rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.home-header .login-button:hover {
+	background-color: var(--theme-button-primary-bg-hover);
+}
+
+.home-content {
+	flex: 1;
+	padding: 2rem;
+	overflow: auto;
+}
+
+/* Login Modal */
+.login-modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgba(0, 0, 0, 0.5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+}
+
+.login-modal {
+	position: relative;
+	background-color: var(--theme-card-bg);
+	border-radius: 0.5rem;
+	padding: 2rem;
+	max-width: 400px;
+	width: 90%;
+	box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.modal-close {
+	position: absolute;
+	top: 1rem;
+	right: 1rem;
+	background: none;
+	border: none;
+	font-size: 1.5rem;
+	cursor: pointer;
+	color: var(--theme-main-text-muted);
+	width: 2rem;
+	height: 2rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 0.25rem;
+	transition: background-color 0.2s;
+}
+
+.modal-close:hover {
+	background-color: var(--theme-card-border);
+}
+
+/* Reuse admin styles for login form inside modal */
+.login-modal .auth-error-state {
+	background: none;
+	padding: 0;
+}
+
+.login-modal .login-container {
+	background: none;
+	box-shadow: none;
+	padding: 0;
+}

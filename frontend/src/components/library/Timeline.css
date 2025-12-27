@@ -1,0 +1,131 @@
+.lib-timeline {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 0 1.25rem;
+	position: relative;
+	padding: 1rem 0;
+}
+
+.lib-timeline-item {
+	display: contents;
+}
+
+.lib-timeline-item:last-child .lib-timeline-step-line {
+	display: none;
+}
+
+.lib-timeline-marker {
+	position: relative;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.lib-timeline-dot {
+	width: 1rem;
+	height: 1rem;
+	border-radius: 50%;
+	background-color: var(--theme-button-primary-bg);
+	border: 3px solid var(--theme-card-bg);
+	box-shadow: 0 0 0 2px var(--theme-button-primary-bg);
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lib-timeline-icon {
+	min-width: 2.5rem;
+	min-height: 2.5rem;
+	padding: 0.5rem;
+	border-radius: 0.625rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background-color: var(--theme-button-primary-bg);
+	color: var(--theme-button-primary-text);
+	font-size: 1.125rem;
+	font-weight: 600;
+	line-height: 1.2;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.lib-timeline-step-line {
+	flex: 1;
+	width: 2px;
+	background-color: var(--theme-card-border);
+	margin-top: 0.5rem;
+	min-height: 2rem;
+	transition: background-color 0.2s;
+}
+
+.lib-timeline-item-success .lib-timeline-dot {
+	background-color: var(--theme-method-get-bg);
+	box-shadow: 0 0 0 2px var(--theme-method-get-bg);
+}
+
+.lib-timeline-item-success .lib-timeline-icon {
+	background-color: var(--theme-method-get-bg);
+}
+
+.lib-timeline-item-error .lib-timeline-dot {
+	background-color: var(--theme-method-delete-bg);
+	box-shadow: 0 0 0 2px var(--theme-method-delete-bg);
+}
+
+.lib-timeline-item-error .lib-timeline-icon {
+	background-color: var(--theme-method-delete-bg);
+}
+
+.lib-timeline-item-warning .lib-timeline-dot {
+	background-color: #f59e0b;
+	box-shadow: 0 0 0 2px #f59e0b;
+}
+
+.lib-timeline-item-warning .lib-timeline-icon {
+	background-color: #f59e0b;
+}
+
+.lib-timeline-item-info .lib-timeline-dot {
+	background-color: #3b82f6;
+	box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.lib-timeline-item-info .lib-timeline-icon {
+	background-color: #3b82f6;
+}
+
+.lib-timeline-content {
+	flex: 1;
+	padding-top: 0.25rem;
+	padding-bottom: 2rem;
+}
+
+.lib-timeline-item:last-child .lib-timeline-content {
+	padding-bottom: 0;
+}
+
+.lib-timeline-timestamp {
+	display: inline-block;
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--theme-main-text-muted);
+	background-color: var(--theme-sidebar-bg);
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
+	margin-bottom: 0.5rem;
+}
+
+.lib-timeline-title {
+	margin: 0 0 0.5rem 0;
+	font-size: 1.0625rem;
+	font-weight: 700;
+	color: var(--theme-main-text);
+	line-height: 1.4;
+}
+
+.lib-timeline-description {
+	margin: 0;
+	font-size: 0.9375rem;
+	color: var(--theme-main-text-muted);
+	line-height: 1.6;
+}

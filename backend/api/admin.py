@@ -58,6 +58,10 @@ class API(ABCApi):
 		self._register_socketio_handlers()
 
 	@property
+	def isroot(self) -> bool:
+		return True
+
+	@property
 	def logs(self) -> Logs:
 		"""Get logs service"""
 		if self._logs is None:
@@ -183,6 +187,13 @@ class API(ABCApi):
 						{"id": "logs", "label": "Logs", "icon": "logs"},
 						{"id": "metrics", "label": "Metrics", "icon": "chart"},
 						{"id": "api-keys", "label": "API Keys", "icon": "key"}
+					]
+				},
+				{
+					"id": "development",
+					"label": "Development",
+					"items": [
+						{"id": "dsl-showcase", "label": "DSL Showcase", "icon": "zap"}
 					]
 				}
 			]
@@ -2245,6 +2256,14 @@ class API(ABCApi):
 		except Exception as e:
 			traceback.print_exc()
 			return jsonify({"error": f"Reload failed: {str(e)}"}), 500
+
+	@register("/dsl-showcase", methods=["GET"])
+	@describe("Get DSL showcase page", "route")
+	@cond(lambda self, **kwargs: True or self.auth.require_admin())
+	def get_dsl_showcase(self):
+		"""Return the comprehensive DSL showcase page"""
+		from ._showcase import build_showcase_page
+		return jsonify(build_showcase_page())
 
 	@property
 	def name(self) -> str:

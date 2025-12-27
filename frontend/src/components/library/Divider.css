@@ -1,0 +1,38 @@
+/* Divider */
+.lib-divider {
+	display: flex;
+	align-items: center;
+	margin: 1rem 0;
+}
+
+.lib-divider-horizontal {
+	width: 100%;
+	height: 1px;
+	color: var(--theme-card-border);
+}
+
+.lib-divider-vertical {
+	width: 1px;
+	height: 100%;
+	background-color: var(--theme-card-border);
+}
+
+.lib-divider-solid {
+	border-style: solid;
+}
+
+.lib-divider-dashed {
+	border-style: dashed;
+}
+
+.lib-divider-dotted {
+	border-style: dotted;
+}
+
+.lib-divider-label {
+	padding: 0 1rem;
+	color: var(--theme-main-text-muted);
+	font-size: 0.875rem;
+	white-space: nowrap;
+	background-color: var(--theme-main-bg);
+}

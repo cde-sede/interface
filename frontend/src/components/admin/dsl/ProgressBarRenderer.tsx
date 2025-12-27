@@ -1,19 +1,23 @@
 /**
  * Progress Bar Renderer
  *
- * Renders a progress bar component
+ * DSL adapter for ProgressBar library component.
  */
 
+import { ProgressBar } from '../../library/ProgressBar';
 import type { ProgressBarComponent } from './types';
+import type { ActionEngine } from './actionEngine';
+import { ComponentWrapper } from './ComponentWrapper';
 import { resolveValue } from './valueResolver';
 
 interface ProgressBarRendererProps {
 	modalData?: any;
 	component: ProgressBarComponent;
 	pageData?: any;
+	actionEngine?: ActionEngine;
 }
 
-export default function ProgressBarRenderer({ component, pageData, modalData }: ProgressBarRendererProps) {
+export default function ProgressBarRenderer({ component, pageData, modalData, actionEngine }: ProgressBarRendererProps) {
 	const {
 		value: rawValue,
 		max = 100,
@@ -21,38 +25,60 @@ export default function ProgressBarRenderer({ component, pageData, modalData }: 
 		variant = 'default',
 		showPercentage = true,
 		striped = false,
-		animated = false
+		animated = false,
+		customStyle,
+		className: rawClassName
 	} = component;
 
-	// Resolve values if they're ValueRefs
-	const value = resolveValue(rawValue, { pageData, data: modalData });
-	const resolvedLabel = label ? resolveValue(label, { pageData, data: modalData }) : undefined;
+	const context = { pageData, data: modalData };
+	const value = resolveValue(rawValue, context);
+	const resolvedLabel = label ? resolveValue(label, context) : undefined;
+	const className = rawClassName ? resolveValue(rawClassName, context) : undefined;
 
-	const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
+	const progressBarElement = (
+		<ProgressBar
+			value={value}
+			max={max}
+			label={resolvedLabel}
+			variant={variant}
+			showPercentage={showPercentage}
+			striped={striped}
+			animated={animated}
+			style={customStyle as React.CSSProperties}
+			className={className}
+		/>
+	);
 
-	const className = [
-		'dsl-progress-bar',
-		`dsl-progress-bar-${variant}`,
-		striped && 'dsl-progress-bar-striped',
-		animated && 'dsl-progress-bar-animated'
-	].filter(Boolean).join(' ');
+	// Only use ComponentWrapper if we have wrapper-level properties
+	const needsWrapper = Boolean(
+		actionEngine && (
+			component.events?.click ||
+			component.events?.hover ||
+			component.id ||
+			component.ariaLabel ||
+			component.ariaDescribedBy
+		)
+	);
+
+	if (!needsWrapper) {
+		return progressBarElement;
+	}
+
+	// Create a component object without customStyle/className to avoid duplication
+	const wrapperComponent = {
+		...component,
+		customStyle: undefined,
+		className: undefined
+	};
 
 	return (
-		<div className="dsl-progress-container">
-			{resolvedLabel && (
-				<div className="dsl-progress-header">
-					<span className="dsl-progress-label">{resolvedLabel}</span>
-					{showPercentage && (
-						<span className="dsl-progress-percentage">{percentage.toFixed(0)}%</span>
-					)}
-				</div>
-			)}
-			<div className={className}>
-				<div
-					className="dsl-progress-fill"
-					style={{ width: `${percentage}%` }}
-				/>
-			</div>
-		</div>
+		<ComponentWrapper
+			component={wrapperComponent}
+			pageData={pageData}
+			modalData={modalData}
+			actionEngine={actionEngine}
+		>
+			{progressBarElement}
+		</ComponentWrapper>
 	);
 }

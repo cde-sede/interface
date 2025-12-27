@@ -1,0 +1,16 @@
+/**
+ * Chart Component Styles
+ */
+
+.lib-chart {
+	width: 100%;
+	margin: 1rem 0;
+}
+
+.lib-chart-error {
+	padding: 2rem;
+	text-align: center;
+	color: var(--theme-main-text-muted);
+	background-color: var(--theme-sidebar-bg);
+	border-radius: 0.25rem;
+}

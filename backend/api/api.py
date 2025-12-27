@@ -14,6 +14,10 @@ class API(ABCApi):
 
 		self.bp.add_url_rule("/", view_func=self.list_apis)
 
+	@property
+	def isroot(self) -> bool:
+		return True
+
 	@describe("Lists all registered API modules and their routes")
 	def list_apis(self):
 		"""Returns a comprehensive list of all loaded API modules with their blueprints and available routes."""

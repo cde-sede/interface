@@ -7,6 +7,7 @@ when building DSL structures on the backend.
 """
 
 from typing import TypedDict, Literal, Any, Optional, Union, List, Dict
+from collections.abc import Sequence
 
 # ============================================================================
 # Value Reference Types
@@ -22,8 +23,9 @@ class ValueRef(TypedDict, total=False):
     - coalesce: First non-null value from options list
     - conditional: Ternary operator (if/then/else)
     - transform: Map/filter transformation on data
+    - urlencode: URL-encode a value using encodeURIComponent
     """
-    type: Literal["literal", "field", "computed", "coalesce", "conditional", "pagination", "transform"]
+    type: Literal["literal", "field", "computed", "coalesce", "conditional", "pagination", "transform", "urlencode"]
 
     # For literal values
     value: Any
@@ -34,7 +36,7 @@ class ValueRef(TypedDict, total=False):
 
     # For computed values
     template: str  # Template with {placeholders}
-    values: Dict[str, 'ValueRef']  # Values to interpolate
+    values: Dict[str, Union['ValueRef', str]]  # Values to interpolate (can be ValueRef or static string)
 
     # For coalesce
     options: List['ValueRef']  # Try these in order
@@ -47,6 +49,9 @@ class ValueRef(TypedDict, total=False):
     # For transform
     input: Union['ValueRef', Any]  # Input data to transform
     transform: str  # Transformation string (regex, object, tuple, or filter)
+
+    # For urlencode
+    encode: Union['ValueRef', Any]  # Value to URL encode
 
 
 # ============================================================================
@@ -67,7 +72,7 @@ class ActionOnError(TypedDict, total=False):
 
 class ActionDefinition(TypedDict, total=False):
     """Defines an action (API call, modal, navigation, etc.)"""
-    type: Literal["api-call", "open-modal", "close-modal", "navigate", "refresh", "show-toast", "open-panel", "close-panel", "toggle-panel", "store-data", "map"]
+    type: Literal["api-call", "open-modal", "close-modal", "navigate", "refresh", "show-toast", "open-panel", "close-panel", "toggle-panel", "store-data", "map", "copy-to-clipboard", "trigger-dynamic"]
 
     # API call config
     endpoint: Union[str, ValueRef]
@@ -92,7 +97,7 @@ class ActionDefinition(TypedDict, total=False):
     url: Union[str, ValueRef]
 
     # Toast control
-    message: Union[str, ValueRef]
+    message: Union[str, ValueRef, "RichTextComponent"]
     toastType: Literal["success", "error", "info", "warning"]
 
     # Store data control
@@ -103,6 +108,79 @@ class ActionDefinition(TypedDict, total=False):
     input: Any  # Input data to transform (can be ValueRef)
     transform: str  # Transformation string (regex, object, or tuple)
     output: Union[str, ValueRef]  # Optional key to store result in datastore
+
+    # Clipboard control
+    copyValue: Union[str, ValueRef]  # Value to copy to clipboard
+
+    # Dynamic component trigger
+    triggerId: str  # ID of dynamic component to trigger
+
+
+# ============================================================================
+# Base Component Properties
+# ============================================================================
+
+class ComponentEvents(TypedDict, total=False):
+    """Event handlers for components"""
+    click: 'ActionDefinition'
+    hover: 'ActionDefinition'  # Triggers on mouseenter, clears on mouseleave
+
+
+class ComponentCustomStyle(TypedDict, total=False):
+    """Custom CSS styling for components"""
+    # Layout
+    display: str
+    position: str
+    top: Union[str, int]
+    right: Union[str, int]
+    bottom: Union[str, int]
+    left: Union[str, int]
+    width: Union[str, int]
+    height: Union[str, int]
+    margin: Union[str, int]
+    padding: Union[str, int]
+
+    # Typography
+    fontSize: Union[str, int]
+    fontWeight: Union[str, int]
+    color: str
+    textAlign: str
+    lineHeight: Union[str, int]
+
+    # Background & Border
+    background: str
+    backgroundColor: str
+    border: str
+    borderRadius: Union[str, int]
+    boxShadow: str
+
+    # Flexbox
+    flex: Union[str, int]
+    flexDirection: str
+    justifyContent: str
+    alignItems: str
+    gap: Union[str, int]
+
+    # Other
+    opacity: float
+    cursor: str
+    overflow: str
+    zIndex: int
+    transform: str
+    transition: str
+
+CustomStyle = ComponentCustomStyle | dict[str, Any]
+
+class BaseComponentProps(TypedDict, total=False):
+    """Base properties inherited by all components"""
+    id: str
+    events: ComponentEvents
+    confirmMessage: Union[str, ValueRef]
+    customStyle: CustomStyle
+    className: Union[str, ValueRef]
+    visible: Union[bool, ValueRef]
+    ariaLabel: Union[str, ValueRef]
+    ariaDescribedBy: Union[str, ValueRef]
 
 
 # ============================================================================
@@ -194,7 +272,7 @@ class TableOnRowClick(TypedDict, total=False):
     params: Dict[str, Union[str, ValueRef]]
 
 
-class TableComponent(TypedDict, total=False):
+class TableComponent(BaseComponentProps, total=False):
     """Table component definition"""
     type: Literal["table"]  # Required
     data: Union[List[Any], ValueRef]  # Required
@@ -229,7 +307,7 @@ class StatCard(TypedDict, total=False):
     trend: StatCardTrend
 
 
-class StatsCardsComponent(TypedDict, total=False):
+class StatsCardsComponent(BaseComponentProps, total=False):
     """Stats cards component"""
     type: Literal["stats-cards"]  # Required
     stats: Union[List[StatCard], ValueRef]  # Required - can be dynamic
@@ -245,7 +323,7 @@ class InfoGridItem(TypedDict, total=False):
     copyable: bool
 
 
-class InfoGridComponent(TypedDict, total=False):
+class InfoGridComponent(BaseComponentProps, total=False):
     """Info grid component"""
     type: Literal["info-grid"]  # Required
     items: Union[List[InfoGridItem], ValueRef]  # Required - can be dynamic
@@ -256,7 +334,7 @@ class InfoGridComponent(TypedDict, total=False):
 # Display Components
 # ============================================================================
 
-class CodeBlockComponent(TypedDict, total=False):
+class CodeBlockComponent(BaseComponentProps, total=False):
     """Code block component"""
     type: Literal["code-block"]  # Required
     content: Union[str, Dict, ValueRef]  # Required
@@ -287,7 +365,7 @@ class ChartConfig(TypedDict, total=False):
     height: int
 
 
-class ChartComponent(TypedDict, total=False):
+class ChartComponent(BaseComponentProps, total=False):
     """Chart component"""
     type: Literal["chart"]  # Required
     chartType: Literal["bar", "line", "pie", "area", "scatter"]  # Required
@@ -295,7 +373,7 @@ class ChartComponent(TypedDict, total=False):
     config: ChartConfig  # Required
 
 
-class DividerComponent(TypedDict, total=False):
+class DividerComponent(BaseComponentProps, total=False):
     """Divider component for visual separation"""
     type: Literal["divider"]  # Required
     label: Union[str, ValueRef]
@@ -303,7 +381,7 @@ class DividerComponent(TypedDict, total=False):
     variant: Literal["solid", "dashed", "dotted"]
 
 
-class BadgeComponent(TypedDict, total=False):
+class BadgeComponent(BaseComponentProps, total=False):
     """Badge component for labels/tags"""
     type: Literal["badge"]  # Required
     label: Union[str, ValueRef]  # Required
@@ -312,7 +390,7 @@ class BadgeComponent(TypedDict, total=False):
     icon: str
 
 
-class ProgressBarComponent(TypedDict, total=False):
+class ProgressBarComponent(BaseComponentProps, total=False):
     """Progress bar component"""
     type: Literal["progress-bar"]  # Required
     value: Union[int, float, ValueRef]  # Required
@@ -324,7 +402,7 @@ class ProgressBarComponent(TypedDict, total=False):
     animated: bool
 
 
-class ImageComponent(TypedDict, total=False):
+class ImageComponent(BaseComponentProps, total=False):
     """Image component"""
     type: Literal["image"]  # Required
     src: Union[str, ValueRef]  # Required
@@ -345,7 +423,7 @@ class TimelineItem(TypedDict, total=False):
     variant: Literal["default", "success", "error", "warning", "info"]
 
 
-class TimelineComponent(TypedDict, total=False):
+class TimelineComponent(BaseComponentProps, total=False):
     """Timeline component for chronological events"""
     type: Literal["timeline"]  # Required
     items: Union[List[TimelineItem], ValueRef]  # Required - can be dynamic
@@ -361,7 +439,7 @@ class ListItem(TypedDict, total=False):
     trailing: Union[str, ValueRef]  # Text or badge on the right
 
 
-class ListComponent(TypedDict, total=False):
+class ListComponent(BaseComponentProps, total=False):
     """List component"""
     type: Literal["list"]  # Required
     items: Union[List[ListItem], ValueRef]  # Required - can be dynamic
@@ -376,7 +454,7 @@ class StepperStep(TypedDict, total=False):
     status: Literal["pending", "active", "completed", "error"]
 
 
-class StepperComponent(TypedDict, total=False):
+class StepperComponent(BaseComponentProps, total=False):
     """Stepper component for multi-step processes"""
     type: Literal["stepper"]  # Required
     steps: Union[List[StepperStep], ValueRef]  # Required - can be dynamic
@@ -384,7 +462,7 @@ class StepperComponent(TypedDict, total=False):
     orientation: Literal["horizontal", "vertical"]
 
 
-class MetricComponent(TypedDict, total=False):
+class MetricComponent(BaseComponentProps, total=False):
     """Metric/KPI component for displaying key metrics"""
     type: Literal["metric"]  # Required
     value: Union[str, int, float, ValueRef]  # Required
@@ -397,7 +475,7 @@ class MetricComponent(TypedDict, total=False):
     variant: Literal["default", "success", "error", "warning", "info"]
 
 
-class AvatarComponent(TypedDict, total=False):
+class AvatarComponent(BaseComponentProps, total=False):
     """Avatar component for user/entity representation"""
     type: Literal["avatar"]  # Required
     src: Union[str, ValueRef]
@@ -407,7 +485,7 @@ class AvatarComponent(TypedDict, total=False):
     status: Literal["online", "offline", "away", "busy"]
 
 
-class CalloutComponent(TypedDict, total=False):
+class CalloutComponent(BaseComponentProps, total=False):
     """Callout component for highlighted notices"""
     type: Literal["callout"]  # Required
     message: Union[str, ValueRef]  # Required
@@ -417,7 +495,7 @@ class CalloutComponent(TypedDict, total=False):
     dismissible: bool
 
 
-class SpacerComponent(TypedDict, total=False):
+class SpacerComponent(BaseComponentProps, total=False):
     """Spacer component for adding spacing"""
     type: Literal["spacer"]  # Required
     size: Literal["xs", "sm", "md", "lg", "xl"]
@@ -431,14 +509,14 @@ class BreadcrumbItem(TypedDict, total=False):
     active: bool
 
 
-class BreadcrumbsComponent(TypedDict, total=False):
+class BreadcrumbsComponent(BaseComponentProps, total=False):
     """Breadcrumbs navigation component"""
     type: Literal["breadcrumbs"]  # Required
     items: Union[List[BreadcrumbItem], ValueRef]  # Required - can be dynamic
     separator: Union[str, ValueRef]
 
 
-class TooltipComponent(TypedDict, total=False):
+class TooltipComponent(BaseComponentProps, total=False):
     """Tooltip component for contextual help"""
     type: Literal["tooltip"]  # Required
     content: Union[str, ValueRef]  # Required - tooltip text
@@ -446,7 +524,7 @@ class TooltipComponent(TypedDict, total=False):
     placement: Literal["top", "bottom", "left", "right"]
 
 
-class ToggleComponent(TypedDict, total=False):
+class ToggleComponent(BaseComponentProps, total=False):
     """Toggle/Switch component for boolean inputs"""
     type: Literal["toggle"]  # Required
     name: str  # Required - form field name
@@ -457,7 +535,7 @@ class ToggleComponent(TypedDict, total=False):
     size: Literal["sm", "md", "lg"]
 
 
-class ChipInputComponent(TypedDict, total=False):
+class ChipInputComponent(BaseComponentProps, total=False):
     """Chip/Tag input component for multiple values"""
     type: Literal["chip-input"]  # Required
     name: str  # Required - form field name
@@ -468,7 +546,7 @@ class ChipInputComponent(TypedDict, total=False):
     onChange: ActionDefinition
 
 
-class SkeletonComponent(TypedDict, total=False):
+class SkeletonComponent(BaseComponentProps, total=False):
     """Skeleton loader component"""
     type: Literal["skeleton"]  # Required
     variant: Literal["text", "circular", "rectangular", "card", "table"]  # Required
@@ -497,7 +575,7 @@ class DropdownOption(TypedDict, total=False):
     disabled: bool
 
 
-class DropdownComponent(TypedDict, total=False):
+class DropdownComponent(BaseComponentProps, total=False):
     """Dropdown select component"""
     type: Literal["dropdown"]  # Required
     name: str  # Required - form field name
@@ -512,6 +590,101 @@ class DropdownComponent(TypedDict, total=False):
     disabled: Union[bool, ValueRef]
 
 
+class TextInputComponent(BaseComponentProps, total=False):
+    """Text input component"""
+    type: Literal["text-input"]  # Required
+    name: str  # Required
+    label: Union[str, ValueRef]
+    placeholder: Union[str, ValueRef]
+    defaultValue: Union[str, ValueRef]
+    inputType: Literal["text", "email", "password", "url", "tel", "search"]
+    required: Union[bool, ValueRef]
+    disabled: Union[bool, ValueRef]
+    readOnly: Union[bool, ValueRef]
+    maxLength: int
+    minLength: int
+    pattern: str
+    onChange: ActionDefinition
+    onBlur: ActionDefinition
+    helperText: Union[str, ValueRef]
+    errorText: Union[str, ValueRef]
+
+
+class NumberInputComponent(BaseComponentProps, total=False):
+    """Number input component"""
+    type: Literal["number-input"]  # Required
+    name: str  # Required
+    label: Union[str, ValueRef]
+    placeholder: Union[str, ValueRef]
+    defaultValue: Union[int, float, ValueRef]
+    min: Union[int, float]
+    max: Union[int, float]
+    step: Union[int, float]
+    required: Union[bool, ValueRef]
+    disabled: Union[bool, ValueRef]
+    readOnly: Union[bool, ValueRef]
+    onChange: ActionDefinition
+    onBlur: ActionDefinition
+    helperText: Union[str, ValueRef]
+    errorText: Union[str, ValueRef]
+
+
+class TextAreaComponent(BaseComponentProps, total=False):
+    """Textarea component for multiline text input"""
+    type: Literal["textarea"]  # Required
+    name: str  # Required
+    label: Union[str, ValueRef]
+    placeholder: Union[str, ValueRef]
+    defaultValue: Union[str, ValueRef]
+    rows: int
+    cols: int
+    maxLength: int
+    minLength: int
+    required: Union[bool, ValueRef]
+    disabled: Union[bool, ValueRef]
+    readOnly: Union[bool, ValueRef]
+    resize: Literal["none", "both", "horizontal", "vertical"]
+    onChange: ActionDefinition
+    onBlur: ActionDefinition
+    helperText: Union[str, ValueRef]
+    errorText: Union[str, ValueRef]
+
+
+class CheckboxComponent(BaseComponentProps, total=False):
+    """Checkbox component"""
+    type: Literal["checkbox"]  # Required
+    name: str  # Required
+    label: Union[str, ValueRef]
+    defaultChecked: Union[bool, ValueRef]
+    required: Union[bool, ValueRef]
+    disabled: Union[bool, ValueRef]
+    onChange: ActionDefinition
+    helperText: Union[str, ValueRef]
+    errorText: Union[str, ValueRef]
+
+
+class RadioOption(TypedDict, total=False):
+    """Radio button option"""
+    value: Any  # Required
+    label: Union[str, ValueRef]  # Required
+    disabled: bool
+
+
+class RadioComponent(BaseComponentProps, total=False):
+    """Radio button group component"""
+    type: Literal["radio"]  # Required
+    name: str  # Required
+    label: Union[str, ValueRef]
+    options: Union[List[RadioOption], ValueRef]  # Required - can be dynamic
+    defaultValue: Union[Any, ValueRef]
+    required: Union[bool, ValueRef]
+    disabled: Union[bool, ValueRef]
+    orientation: Literal["horizontal", "vertical"]
+    onChange: ActionDefinition
+    helperText: Union[str, ValueRef]
+    errorText: Union[str, ValueRef]
+
+
 class TreeNode(TypedDict, total=False):
     """Tree node definition"""
     id: str  # Required - unique identifier
@@ -522,7 +695,7 @@ class TreeNode(TypedDict, total=False):
     action: ActionDefinition
 
 
-class TreeViewComponent(TypedDict, total=False):
+class TreeViewComponent(BaseComponentProps, total=False):
     """Tree view component for hierarchical data"""
     type: Literal["tree-view"]  # Required
     nodes: Union[List[TreeNode], ValueRef]  # Required - can be dynamic
@@ -530,7 +703,7 @@ class TreeViewComponent(TypedDict, total=False):
     showIcons: bool
 
 
-class FileUploadComponent(TypedDict, total=False):
+class FileUploadComponent(BaseComponentProps, total=False):
     """File upload component"""
     type: Literal["file-upload"]  # Required
     name: str  # Required - form field name
@@ -544,6 +717,22 @@ class FileUploadComponent(TypedDict, total=False):
     onRemove: ActionDefinition  # Called when a file is removed from the list
 
 
+class DatePickerComponent(BaseComponentProps, total=False):
+    """Date picker component with customizable formatting"""
+    type: Literal["date-picker"]  # Required
+    name: str  # Required - form field name
+    label: Union[str, ValueRef]
+    defaultValue: Union[str, ValueRef]  # ISO date string
+    format: str  # Date format string (e.g., "YYYY-MM-DD", "MM/DD/YYYY")
+    placeholder: Union[str, ValueRef]
+    disabled: Union[bool, ValueRef]
+    readonly: Union[bool, ValueRef]
+    clearable: bool
+    minDate: Union[str, ValueRef]  # ISO date string
+    maxDate: Union[str, ValueRef]  # ISO date string
+    onChange: ActionDefinition
+
+
 class DataGridColumn(TypedDict, total=False):
     """Data grid column definition"""
     key: str  # Required
@@ -554,7 +743,7 @@ class DataGridColumn(TypedDict, total=False):
     options: List["FormFieldOption"]  # For select type
 
 
-class DataGridComponent(TypedDict, total=False):
+class DataGridComponent(BaseComponentProps, total=False):
     """Data grid component - advanced editable table"""
     type: Literal["data-grid"]  # Required
     data: Union[List[Any], ValueRef]  # Required
@@ -577,22 +766,112 @@ class CalendarEvent(TypedDict, total=False):
     action: ActionDefinition
 
 
-class CalendarComponent(TypedDict, total=False):
+class CalendarComponent(BaseComponentProps, total=False):
     """Calendar component"""
     type: Literal["calendar"]  # Required
-    events: Union[List[CalendarEvent], ValueRef]  # Required - can be dynamic
+    calendarEvents: Union[List[CalendarEvent], ValueRef]  # Required - can be dynamic (renamed to avoid conflict with BaseComponentProps.events)
     view: Literal["month", "week", "day", "agenda"]
     onEventClick: ActionDefinition
     onDateClick: ActionDefinition
 
 
-class GridComponent(TypedDict, total=False):
+class GridComponent(BaseComponentProps, total=False):
     """Grid layout component for arranging components in a grid"""
     type: Literal["grid"]  # Required
     items: Union[List['ComponentDefinition'], ValueRef]  # Required - components to display in grid
     columns: Union[int, str]  # Number of columns or CSS grid template (e.g. "1fr 2fr" or 3)
     gap: Union[str, ValueRef]  # Gap between grid items (e.g. "1rem", "20px")
     autoRows: Union[str, ValueRef]  # CSS grid-auto-rows value (e.g. "minmax(100px, auto)")
+
+
+class FlexComponent(BaseComponentProps, total=False):
+    """Flexbox layout component for flexible layouts"""
+    type: Literal["flex"]  # Required
+    items: Union[List['ComponentDefinition'], ValueRef]  # Required - components to display
+    direction: Literal["row", "column", "row-reverse", "column-reverse"]  # Flex direction
+    justify: Literal["flex-start", "flex-end", "center", "space-between", "space-around", "space-evenly"]  # Justify content
+    align: Literal["flex-start", "flex-end", "center", "baseline", "stretch"]  # Align items
+    wrap: Literal["nowrap", "wrap", "wrap-reverse"]  # Flex wrap
+    gap: Union[str, ValueRef]  # Gap between items
+
+
+class ContainerComponent(BaseComponentProps, total=False):
+    """Container component for wrapping and constraining content"""
+    type: Literal["container"]  # Required
+    children: Union[List['ComponentDefinition'], ValueRef]  # Required - child components
+    maxWidth: Union[str, ValueRef]  # Maximum width of container
+    padding: Union[str, ValueRef]  # Padding inside container
+    centered: bool  # Whether to center the container horizontally
+
+
+class DeferTrigger(TypedDict, total=False):
+    """Defer trigger configuration
+
+    Specifies when to load deferred content
+    """
+    type: Literal["action", "intersection", "scroll", "conditional", "immediate"]  # Required
+    actionId: str  # For action trigger: ID of action that triggers the load
+    rootMargin: str  # For intersection trigger: viewport margin (e.g., "200px")
+    threshold: float  # For intersection trigger: 0.0 to 1.0, fraction visible
+    scrollThreshold: int  # For scroll trigger: pixels from top or percentage
+    condition: ValueRef  # For conditional trigger: condition to evaluate
+
+
+class DeferCache(TypedDict, total=False):
+    """Defer cache configuration"""
+    enabled: bool  # Required
+    key: Union[str, ValueRef]  # Custom cache key (defaults to endpoint)
+    ttl: int  # Time to live in milliseconds
+
+
+class DeferComponent(BaseComponentProps, total=False):
+    """Defer component - Lazy loading DSL content
+
+    Allows components to be loaded on-demand from an endpoint,
+    triggered by various events (immediate, viewport visibility, action, scroll, conditional)
+    """
+    type: Literal["defer"]  # Required
+    endpoint: Union[str, ValueRef]  # Required - endpoint to fetch deferred content from
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"]  # HTTP method (default: GET)
+    params: Dict[str, Union[ValueRef, Any]]  # Query parameters (?key=value&key2=value2)
+    body: Dict[str, Any]  # Request body for POST/PUT/PATCH
+    headers: Dict[str, str]  # Custom headers
+    trigger: DeferTrigger  # Trigger configuration (defaults to immediate)
+    loadingState: 'ComponentDefinition'  # Loading state while fetching
+    errorState: 'ComponentDefinition'  # Error state on fetch failure
+    fallback: List['ComponentDefinition']  # Fallback content if deferred content fails
+    cache: DeferCache  # Caching configuration
+
+    # Action hooks for defer lifecycle
+    onTrigger: ActionDefinition  # Executed when defer is triggered (before fetching)
+    onLoad: ActionDefinition  # Executed when content successfully loads
+    onError: ActionDefinition  # Executed when loading fails
+
+
+class DynamicComponent(BaseComponentProps, total=False):
+    """Dynamic component - Action-triggered reloadable content
+
+    Similar to Defer but designed for repeated triggering:
+    - Triggered by action IDs
+    - Can be triggered multiple times
+    - Each trigger replaces the content (not appends)
+    - No caching - always fetches fresh content
+    """
+    type: Literal["dynamic"]  # Required
+    triggerId: str  # Required - Action ID that triggers content loading
+    endpoint: Union[str, ValueRef]  # Required - endpoint to fetch content from
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"]  # HTTP method (default: GET)
+    params: Dict[str, Union[ValueRef, Any]]  # Query parameters (?key=value&key2=value2)
+    body: Dict[str, Any]  # Request body for POST/PUT/PATCH
+    headers: Dict[str, str]  # Custom headers
+    initialContent: List['ComponentDefinition']  # Initial content before first trigger
+    loadingState: 'ComponentDefinition'  # Loading state while fetching
+    errorState: 'ComponentDefinition'  # Error state on fetch failure
+
+    # Action hooks for lifecycle
+    onTrigger: ActionDefinition  # Executed when triggered (before fetching)
+    onLoad: ActionDefinition  # Executed when content successfully loads
+    onError: ActionDefinition  # Executed when loading fails
 
 
 # ============================================================================
@@ -630,7 +909,7 @@ class FormFieldDefinition(TypedDict, total=False):
     readonly: bool
 
 
-class FormComponent(TypedDict, total=False):
+class FormComponent(BaseComponentProps, total=False):
     """Form component"""
     type: Literal["form"]  # Required
     fields: Union[List[FormFieldDefinition], ValueRef]  # Required - can be dynamic
@@ -644,7 +923,7 @@ class FormComponent(TypedDict, total=False):
 # Interactive Components
 # ============================================================================
 
-class ButtonComponent(TypedDict, total=False):
+class ButtonComponent(BaseComponentProps, total=False):
     """Button component"""
     type: Literal["button"]  # Required
     label: Union[str, ValueRef]  # Required
@@ -653,10 +932,10 @@ class ButtonComponent(TypedDict, total=False):
     icon: Union[str, ValueRef]
     size: Literal["small", "medium", "large"]
     disabled: Union[bool, ValueRef]
-    confirmMessage: Union[str, ValueRef]
+    # confirmMessage inherited from BaseComponentProps
 
 
-class AlertComponent(TypedDict, total=False):
+class AlertComponent(BaseComponentProps, total=False):
     """Alert component"""
     type: Literal["alert"]  # Required
     message: Union[str, ValueRef]  # Required
@@ -664,7 +943,7 @@ class AlertComponent(TypedDict, total=False):
     dismissible: bool
 
 
-class EmptyStateComponent(TypedDict, total=False):
+class EmptyStateComponent(BaseComponentProps, total=False):
     """Empty state component"""
     type: Literal["empty-state"]  # Required
     message: Union[str, ValueRef]  # Required
@@ -673,11 +952,19 @@ class EmptyStateComponent(TypedDict, total=False):
     action: ButtonComponent
 
 
+class RichTextComponent(BaseComponentProps, total=False):
+    """Rich text component with markdown-style formatting"""
+    type: Literal["rich-text"]  # Required
+    content: Union[str, ValueRef]  # Required
+    variant: Literal["body", "small", "large"]
+    align: Literal["left", "center", "right", "justify"]
+
+
 # ============================================================================
 # Container Components
 # ============================================================================
 
-class CardComponent(TypedDict, total=False):
+class CardComponent(BaseComponentProps, total=False):
     """Card component for grouping content"""
     type: Literal["card"]  # Required
     content: Union[List['ComponentDefinition'], ValueRef]  # Required - can be dynamic
@@ -688,6 +975,24 @@ class CardComponent(TypedDict, total=False):
     padding: Literal["none", "small", "medium", "large"]
 
 
+class TabsItem(TypedDict, total=False):
+    """Single tab item"""
+    id: str  # Required - identifier, not dynamic
+    label: Union[str, ValueRef]  # Required
+    icon: Union[str, ValueRef]
+    content: List['ComponentDefinition']  # Required
+    disabled: bool
+
+
+class TabsComponent(BaseComponentProps, total=False):
+    """Tabs component for tabbed interface"""
+    type: Literal["tabs"]  # Required
+    items: List[TabsItem]  # Required
+    defaultTab: str
+    variant: Literal["default", "pills", "underlined"]
+    orientation: Literal["horizontal", "vertical"]
+
+
 class AccordionItem(TypedDict, total=False):
     """Single accordion item"""
     id: str  # Required - identifier, not dynamic
@@ -696,7 +1001,7 @@ class AccordionItem(TypedDict, total=False):
     defaultExpanded: bool
 
 
-class AccordionComponent(TypedDict, total=False):
+class AccordionComponent(BaseComponentProps, total=False):
     """Accordion component for collapsible sections"""
     type: Literal["accordion"]  # Required
     items: Union[List[AccordionItem], ValueRef]  # Required - can be dynamic
@@ -718,11 +1023,13 @@ ComponentDefinition = Union[
     ButtonComponent,
     AlertComponent,
     EmptyStateComponent,
+    RichTextComponent,
     DividerComponent,
     BadgeComponent,
     ProgressBarComponent,
     CardComponent,
     AccordionComponent,
+    TabsComponent,
     ImageComponent,
     TimelineComponent,
     ListComponent,
@@ -739,9 +1046,19 @@ ComponentDefinition = Union[
     DropdownComponent,
     TreeViewComponent,
     FileUploadComponent,
+    DatePickerComponent,
     DataGridComponent,
     CalendarComponent,
     GridComponent,
+    FlexComponent,
+    ContainerComponent,
+    DeferComponent,
+    DynamicComponent,
+    TextInputComponent,
+    NumberInputComponent,
+    TextAreaComponent,
+    CheckboxComponent,
+    RadioComponent,
 ]
 
 
@@ -749,14 +1066,14 @@ ComponentDefinition = Union[
 # Layout Types
 # ============================================================================
 
-class SectionComponent(TypedDict, total=False):
+class SectionComponent(BaseComponentProps, total=False):
     """Section component (groups components)"""
-    components: Union[List[ComponentDefinition], ValueRef]  # Required - can be dynamic
-    id: str  # Identifier, not dynamic
+    components: Union[Sequence[ComponentDefinition], ValueRef]  # Required - can be dynamic
+    # id inherited from BaseComponentProps
     title: Union[str, ValueRef]
     collapsible: bool
     defaultCollapsed: bool
-    className: str
+    # className inherited from BaseComponentProps
 
 
 class TabDefinition(TypedDict, total=False):
@@ -767,13 +1084,13 @@ class TabDefinition(TypedDict, total=False):
     icon: Union[str, ValueRef]
 
 
-class LayoutComponent(TypedDict, total=False):
+class LayoutComponent(BaseComponentProps, total=False):
     """Layout component"""
     type: Literal["vertical", "horizontal", "grid", "tabs"]  # Required
     sections: Union[List[SectionComponent], ValueRef]
     tabs: Union[List[TabDefinition], ValueRef]
     gap: str
-    className: str
+    # className inherited from BaseComponentProps
 
 
 # ============================================================================
@@ -783,7 +1100,7 @@ class LayoutComponent(TypedDict, total=False):
 class ModalDefinition(TypedDict, total=False):
     """Modal definition"""
     title: Union[str, ValueRef]  # Required
-    content: Union[List[ComponentDefinition], ValueRef]  # Required - can be dynamic
+    content: Union[Sequence[ComponentDefinition], ValueRef]  # Required - can be dynamic
     size: Literal["small", "medium", "large", "fullscreen"]
     actions: Union[List[ButtonComponent], ValueRef]
     closeOnOverlayClick: bool
@@ -792,7 +1109,7 @@ class ModalDefinition(TypedDict, total=False):
 class PanelDefinition(TypedDict, total=False):
     """Panel definition for bottom-right collapsible panel"""
     title: Union[str, ValueRef]  # Required
-    content: Union[List[ComponentDefinition], ValueRef]  # Required - can be dynamic
+    content: Union[Sequence[ComponentDefinition], ValueRef]  # Required - can be dynamic
     width: Union[str, ValueRef]  # Width of panel (e.g., "400px", "30%")
     defaultOpen: bool  # Whether panel starts open
     position: Literal["bottom-right", "bottom-left", "top-right", "top-left"]  # Panel position

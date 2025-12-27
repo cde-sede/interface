@@ -6,15 +6,18 @@
 
 import { useState } from 'react';
 import type { CodeBlockComponent } from './types';
+import type { ActionEngine } from './actionEngine';
+import { ComponentWrapper } from './ComponentWrapper';
 import { resolveValue } from './valueResolver';
 
 interface CodeBlockRendererProps {
 	modalData?: any;
 	component: CodeBlockComponent;
 	pageData?: any;
+	actionEngine?: ActionEngine;
 }
 
-export default function CodeBlockRenderer({ component, pageData, modalData }: CodeBlockRendererProps) {
+export default function CodeBlockRenderer({ component, pageData, modalData, actionEngine }: CodeBlockRendererProps) {
 	const { content, language = 'json', copyable = true, collapsible = false } = component;
 	const [copied, setCopied] = useState(false);
 	const [collapsed, setCollapsed] = useState(false);
@@ -43,8 +46,15 @@ export default function CodeBlockRenderer({ component, pageData, modalData }: Co
 		}
 	};
 
-	return (
-		<div className="code-block-container">
+	const { customStyle, className: rawClassName } = component;
+	const context = { pageData, data: modalData };
+	const customClassName = rawClassName ? resolveValue(rawClassName, context) : undefined;
+	const containerClassName = customClassName
+		? `code-block-container ${customClassName}`
+		: 'code-block-container';
+
+	const codeBlockElement = (
+		<div className={containerClassName} style={customStyle as React.CSSProperties}>
 			<div className="code-block-header">
 				<span className="code-block-language">{language}</span>
 				<div className="code-block-actions">
@@ -74,5 +84,38 @@ export default function CodeBlockRenderer({ component, pageData, modalData }: Co
 				</pre>
 			)}
 		</div>
+	);
+
+	// Only use ComponentWrapper if we have wrapper-level properties
+	const needsWrapper = Boolean(
+		actionEngine && (
+			component.events?.click ||
+			component.events?.hover ||
+			component.id ||
+			component.ariaLabel ||
+			component.ariaDescribedBy
+		)
+	);
+
+	if (!needsWrapper) {
+		return codeBlockElement;
+	}
+
+	// Create a component object without customStyle/className to avoid duplication
+	const wrapperComponent = {
+		...component,
+		customStyle: undefined,
+		className: undefined
+	};
+
+	return (
+		<ComponentWrapper
+			component={wrapperComponent}
+			pageData={pageData}
+			modalData={modalData}
+			actionEngine={actionEngine}
+		>
+			{codeBlockElement}
+		</ComponentWrapper>
 	);
 }

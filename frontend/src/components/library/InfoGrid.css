@@ -1,0 +1,69 @@
+/* InfoGrid */
+.lib-info-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+	gap: 1rem;
+	background: var(--theme-card-bg);
+	border: 1px solid var(--theme-card-border);
+	border-radius: 8px;
+	padding: 1.5rem;
+}
+
+.lib-info-item {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.lib-info-label {
+	font-size: 0.75rem;
+	color: var(--theme-main-text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.025em;
+	font-weight: 500;
+}
+
+.lib-info-value {
+	font-size: 1.125rem;
+	color: var(--theme-main-text);
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.lib-info-value-code {
+	font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+	background: var(--theme-code-bg);
+	border: 1px solid var(--theme-code-border);
+	padding: 0.25rem 0.5rem;
+	border-radius: 4px;
+	font-size: 0.875rem;
+	color: var(--theme-code-text);
+}
+
+.lib-status-badge {
+	display: inline-block;
+	padding: 0.25rem 0.625rem;
+	border-radius: 4px;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.025em;
+}
+
+.lib-copy-button {
+	padding: 0.5rem 1rem;
+	background: var(--theme-button-primary-bg);
+	color: var(--theme-button-primary-text);
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-weight: 500;
+	transition: background 0.2s;
+	white-space: nowrap;
+}
+
+.lib-copy-button:hover {
+	background: var(--theme-button-primary-bg-hover);
+}

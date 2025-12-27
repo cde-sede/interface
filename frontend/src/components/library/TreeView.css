@@ -1,0 +1,64 @@
+.lib-tree-view {
+	font-size: 0.875rem;
+}
+
+.lib-tree-node {
+	user-select: none;
+}
+
+.lib-tree-node-content {
+	display: flex;
+	align-items: center;
+	padding: 0.375rem 0.5rem;
+	cursor: pointer;
+	border-radius: 0.25rem;
+	transition: background-color 0.15s;
+}
+
+.lib-tree-node-content:hover {
+	background-color: var(--theme-sidebar-item-bg-hover, rgba(0, 0, 0, 0.05));
+}
+
+.lib-tree-node-selectable .lib-tree-node-content {
+	cursor: pointer;
+}
+
+.lib-tree-node-selected {
+	background-color: rgba(59, 130, 246, 0.1);
+	color: var(--theme-input-accent);
+}
+
+.lib-tree-node-toggle {
+	background: none;
+	border: none;
+	padding: 0.25rem;
+	cursor: pointer;
+	color: var(--theme-main-text-muted);
+	transition: transform 0.2s;
+	margin-right: 0.25rem;
+	font-size: 0.75rem;
+}
+
+.lib-tree-node-expanded {
+	transform: rotate(90deg);
+}
+
+.lib-tree-node-spacer {
+	width: 1rem;
+	display: inline-block;
+}
+
+.lib-tree-node-label {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex: 1;
+}
+
+.lib-tree-node-icon {
+	flex-shrink: 0;
+}
+
+.lib-tree-node-children {
+	margin-left: 0;
+}

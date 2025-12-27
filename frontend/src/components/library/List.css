@@ -1,0 +1,122 @@
+.lib-list {
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	border-radius: 0.5rem;
+	overflow: hidden;
+	margin: 0.5rem 0;
+}
+
+.lib-list-default {
+	background-color: var(--theme-card-bg);
+}
+
+.lib-list-bordered {
+	border: 1px solid var(--theme-card-border);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.lib-list-divided .lib-list-item-icon {
+	border-bottom: 1px solid var(--theme-card-border);
+}
+
+.lib-list-divided .lib-list-item-content {
+	border-bottom: 1px solid var(--theme-card-border);
+}
+
+.lib-list-divided .lib-list-item-trailing {
+	border-bottom: 1px solid var(--theme-card-border);
+}
+
+.lib-list-item {
+	display: contents;
+}
+
+.lib-list-item-clickable {
+	cursor: pointer;
+}
+
+.lib-list-item-clickable .lib-list-item-icon,
+.lib-list-item-clickable .lib-list-item-content,
+.lib-list-item-clickable .lib-list-item-trailing {
+	cursor: pointer;
+}
+
+.lib-list-item-clickable:active .lib-list-item-icon,
+.lib-list-item-clickable:active .lib-list-item-content,
+.lib-list-item-clickable:active .lib-list-item-trailing {
+	transform: scale(0.99);
+}
+
+.lib-list-item-hoverable:hover .lib-list-item-content {
+	background-color: var(--theme-sidebar-bg);
+}
+
+.lib-list-item-clickable.lib-list-item-hoverable:hover .lib-list-item-content {
+	background-color: rgba(59, 130, 246, 0.03);
+}
+
+.lib-list-item-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1.25rem;
+	font-size: 1.5rem;
+	line-height: 1;
+	color: var(--theme-button-primary-bg);
+	background-color: rgba(59, 130, 246, 0.08);
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lib-list-item-hoverable:hover .lib-list-item-icon {
+	background-color: rgba(59, 130, 246, 0.12);
+}
+
+.lib-list-item-hoverable:hover .lib-list-item-icon,
+.lib-list-item-hoverable:hover .lib-list-item-trailing {
+	background-color: var(--theme-sidebar-bg);
+}
+
+.lib-list-item-clickable.lib-list-item-hoverable:hover .lib-list-item-icon,
+.lib-list-item-clickable.lib-list-item-hoverable:hover .lib-list-item-trailing {
+	background-color: rgba(59, 130, 246, 0.05);
+}
+
+.lib-list-item-content {
+	padding: 1rem 1.25rem;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	justify-content: center;
+}
+
+.lib-list-item-content:last-child {
+	grid-column: span 2;
+}
+
+.lib-list-item-label {
+	font-size: 0.9375rem;
+	font-weight: 600;
+	color: var(--theme-main-text);
+	line-height: 1.4;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.lib-list-item-description {
+	font-size: 0.8125rem;
+	color: var(--theme-main-text-muted);
+	line-height: 1.5;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.lib-list-item-trailing {
+	display: flex;
+	align-items: center;
+	padding: 1rem 1.25rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--theme-main-text-muted);
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}

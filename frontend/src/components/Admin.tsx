@@ -5,7 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { ToastNotification, ConfirmDialog, LoginForm } from './admin/components';
 import type { Toast } from './admin/components';
 import DSLRenderer from './admin/DSLRenderer';
-import type { PageDSL } from './admin/dsl/types';
+import type { PageDSL, RichTextComponent } from './admin/dsl/types';
 
 interface MenuItem {
 	id: string;
@@ -56,7 +56,7 @@ export default function Admin() {
 		selectedPageRef.current = selectedPage;
 	}, [selectedPage]);
 
-	const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+	const showToast = (message: string | RichTextComponent, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
 		const id = Date.now();
 		setToasts(prev => [...prev, { id, message, type }]);
 		setTimeout(() => {
@@ -172,15 +172,15 @@ export default function Admin() {
 		});
 
 		socketInstance.on('connect', () => {
-			console.log('[Socket.IO] Connected, joining page room:', selectedPageRef.current);
+			// console.log('[Socket.IO] Connected, joining page room:', selectedPageRef.current);
 			// Join the current page room on connect
 			if (selectedPageRef.current) {
 				socketInstance.emit('join_page', { page: selectedPageRef.current });
 			}
 		});
 
-		socketInstance.on('disconnect', (reason) => {
-			console.log('Socket.IO disconnected:', reason);
+		socketInstance.on('disconnect', (_reason) => {
+			// console.log('Socket.IO disconnected:', reason);
 		});
 
 		socketInstance.on('connect_error', (error) => {
@@ -188,8 +188,8 @@ export default function Admin() {
 		});
 
 		// Add catch-all listener for debugging
-		socketInstance.onAny((eventName, ...args) => {
-			console.log('[Socket.IO] Received ANY event:', eventName, args);
+		socketInstance.onAny((_eventName, ..._args) => {
+			// console.log('[Socket.IO] Received ANY event:', eventName, args);
 		});
 
 		// Store socket in state for DSLRenderer to use
@@ -199,7 +199,7 @@ export default function Admin() {
 		(window as any).__adminSocket = socketInstance;
 
 		return () => {
-			console.log('Cleaning up Socket.IO connection');
+			// console.log('Cleaning up Socket.IO connection');
 			socketInstance.disconnect();
 			delete (window as any).__adminSocket;
 			setSocket(null);
@@ -212,7 +212,7 @@ export default function Admin() {
 		if (!socket || !socket.connected) return;
 
 		// Leave the previous page room and join the new one
-		console.log('[Socket.IO] Switching to page:', selectedPage);
+		// console.log('[Socket.IO] Switching to page:', selectedPage);
 		socket.emit('leave_page', { page: selectedPageRef.current });
 		socket.emit('join_page', { page: selectedPage });
 	}, [selectedPage]);

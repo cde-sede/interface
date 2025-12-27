@@ -133,6 +133,9 @@ class ABCApi(ABC):
 	@abstractmethod
 	def blueprint(self) -> Blueprint: ...
 
+	@property
+	def isroot(self) -> bool: return False
+
 	def add_rules(self, bp: Blueprint) -> None:
 		for attr_name in dir(self):
 			if attr_name.startswith('_'):

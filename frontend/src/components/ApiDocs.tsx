@@ -140,7 +140,7 @@ export default function ApiDocs() {
 				}
 			})
 			.then(data => {
-				console.log('Fetched endpoints:', data);
+				// console.log('Fetched endpoints:', data);
 				const endpointList = data.functions || [];
 
 				// Fetch details for all endpoints
@@ -168,7 +168,7 @@ export default function ApiDocs() {
 			})
 			.then(({ endpointList, details }) => {
 				const validDetails = details.filter(d => d !== null);
-				console.log('Fetched all endpoint details:', validDetails);
+				// console.log('Fetched all endpoint details:', validDetails);
 
 				// Store in cache
 				endpointCache.current[selectedApiName] = {
@@ -420,7 +420,7 @@ export default function ApiDocs() {
 										key={api.blueprint}
 										className={`api-item ${selectedApiName === api.name ? 'active' : ''}`}
 										onClick={() => {
-											console.log(`Clicked API: ${api.name}`);
+											// console.log(`Clicked API: ${api.name}`);
 											setSelectedApiName(api.name);
 											setActiveEndpoint(null);
 											setTestResponse({});

@@ -5,24 +5,17 @@
  */
 
 import { useState } from 'react';
-import type { AccordionComponent, ComponentDefinition } from './types';
+import type { AccordionComponent } from './types';
+import type { ActionEngine } from './actionEngine';
+import { ComponentWrapper } from './ComponentWrapper';
 import { resolveValue } from './valueResolver';
-import { ActionEngine } from './actionEngine';
-import StatsCardsRenderer from './StatsCardsRenderer';
-import InfoGridRenderer from './InfoGridRenderer';
-import CodeBlockRenderer from './CodeBlockRenderer';
-import TableRenderer from './TableRenderer';
-import ButtonRenderer from './ButtonRenderer';
-import FormRenderer from './FormRenderer';
-import BadgeRenderer from './BadgeRenderer';
-import ProgressBarRenderer from './ProgressBarRenderer';
-import DividerRenderer from './DividerRenderer';
+import { renderComponent } from '../DSLRenderer';
 
 interface AccordionRendererProps {
 	modalData?: any;
 	component: AccordionComponent;
 	pageData?: any;
-	actionEngine: ActionEngine;
+	actionEngine?: ActionEngine;
 }
 
 export default function AccordionRenderer({ component, pageData, modalData, actionEngine }: AccordionRendererProps) {
@@ -54,44 +47,18 @@ export default function AccordionRenderer({ component, pageData, modalData, acti
 		});
 	};
 
-	const renderComponent = (comp: ComponentDefinition, index: number) => {
-		switch (comp.type) {
-			case 'stats-cards':
-				return <StatsCardsRenderer key={index} component={comp} />;
-			case 'info-grid':
-				return <InfoGridRenderer key={index} component={comp} pageData={pageData} modalData={modalData} />;
-			case 'code-block':
-				return <CodeBlockRenderer key={index} component={comp} pageData={pageData} modalData={modalData} />;
-			case 'table':
-				return <TableRenderer key={index} component={comp} pageData={pageData} modalData={modalData} actionEngine={actionEngine} />;
-			case 'button':
-				return <ButtonRenderer key={index} component={comp} pageData={pageData} modalData={modalData} actionEngine={actionEngine} />;
-			case 'form':
-				return <FormRenderer key={index} component={comp} pageData={pageData} modalData={modalData} actionEngine={actionEngine} />;
-			case 'badge':
-				return <BadgeRenderer key={index} component={comp} pageData={pageData} modalData={modalData} />;
-			case 'progress-bar':
-				return <ProgressBarRenderer key={index} component={comp} pageData={pageData} modalData={modalData} />;
-			case 'divider':
-				return <DividerRenderer key={index} component={comp} />;
-			case 'alert':
-				return (
-					<div key={index} className={`alert alert-${comp.variant}`}>
-						{comp.message}
-					</div>
-				);
-			default:
-				return <div key={index}>Unknown component type</div>;
-		}
-	};
+	const { customStyle, className: rawClassName } = component;
+	const context = { pageData, data: modalData };
+	const customClassName = rawClassName ? resolveValue(rawClassName, context) : undefined;
+	const accordionClassName = customClassName
+		? `dsl-accordion dsl-accordion-${variant} ${customClassName}`
+		: `dsl-accordion dsl-accordion-${variant}`;
 
-	const className = `dsl-accordion dsl-accordion-${variant}`;
-
-	return (
-		<div className={className}>
+	const accordionElement = (
+		<div className={accordionClassName} style={customStyle as React.CSSProperties}>
 			{items.map((item) => {
 				const isExpanded = expandedItems.has(item.id);
-				const resolvedTitle = resolveValue(item.title, { pageData, data: modalData });
+				const resolvedTitle = resolveValue(item.title, context);
 
 				return (
 					<div key={item.id} className={`dsl-accordion-item ${isExpanded ? 'expanded' : ''}`}>
@@ -103,14 +70,51 @@ export default function AccordionRenderer({ component, pageData, modalData, acti
 							<span className="dsl-accordion-title">{resolvedTitle}</span>
 							<span className="dsl-accordion-icon">{isExpanded ? '−' : '+'}</span>
 						</button>
-						{isExpanded && (
+						<div className="dsl-accordion-content-wrapper">
 							<div className="dsl-accordion-content">
-								{item.content.map((comp, index) => renderComponent(comp, index))}
+								{item.content.map((comp, index) => (
+									<div key={index}>
+										{actionEngine && renderComponent(comp, pageData, modalData, actionEngine)}
+									</div>
+								))}
 							</div>
-						)}
+						</div>
 					</div>
 				);
 			})}
 		</div>
+	);
+
+	// Only use ComponentWrapper if we have wrapper-level properties
+	const needsWrapper = Boolean(
+		actionEngine && (
+			component.events?.click ||
+			component.events?.hover ||
+			component.id ||
+			component.ariaLabel ||
+			component.ariaDescribedBy
+		)
+	);
+
+	if (!needsWrapper) {
+		return accordionElement;
+	}
+
+	// Create a component object without customStyle/className to avoid duplication
+	const wrapperComponent = {
+		...component,
+		customStyle: undefined,
+		className: undefined
+	};
+
+	return (
+		<ComponentWrapper
+			component={wrapperComponent}
+			pageData={pageData}
+			modalData={modalData}
+			actionEngine={actionEngine}
+		>
+			{accordionElement}
+		</ComponentWrapper>
 	);
 }

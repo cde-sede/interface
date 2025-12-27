@@ -1,0 +1,63 @@
+/* Badge */
+.lib-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.25rem 0.75rem;
+	border-radius: 9999px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.lib-badge-small {
+	font-size: 0.75rem;
+	padding: 0.125rem 0.5rem;
+}
+
+.lib-badge-medium {
+	font-size: 0.875rem;
+}
+
+.lib-badge-large {
+	font-size: 1rem;
+	padding: 0.375rem 1rem;
+}
+
+.lib-badge-default {
+	background-color: var(--theme-sidebar-bg);
+	color: var(--theme-main-text);
+	border: 1px solid var(--theme-card-border);
+}
+
+.lib-badge-success {
+	background-color: var(--theme-method-get-bg);
+	color: var(--theme-method-get-text);
+}
+
+.lib-badge-error {
+	background-color: var(--theme-method-delete-bg);
+	color: var(--theme-method-delete-text);
+}
+
+.lib-badge-warning {
+	background-color: rgba(245, 158, 11, 0.15);
+	color: #f59e0b;
+}
+
+.lib-badge-info {
+	background-color: rgba(59, 130, 246, 0.15);
+	color: #3b82f6;
+}
+
+.lib-badge-primary {
+	background-color: var(--theme-button-primary-bg);
+	color: var(--theme-button-primary-text);
+}
+
+.lib-badge-icon {
+	font-size: 1em;
+}
+
+.lib-badge-label {
+	white-space: nowrap;
+}
