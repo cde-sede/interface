@@ -4,7 +4,7 @@
  * DSL adapter for Table library component.
  */
 
-import { startTransition } from 'react';
+import { startTransition, useState, useEffect, useMemo } from 'react';
 import { Table } from '../../library/Table';
 import type {
 	TableColumn,
@@ -28,9 +28,37 @@ interface TableRendererProps {
 export default function TableRenderer({ component, pageData, modalData, actionEngine }: TableRendererProps) {
 	const { actions, rowActions, emptyState, onRowClick, density, pagination, sortable } = component;
 
-	// Resolve data and columns
-	const data = resolveComponentData(component.data, pageData, modalData);
+	// Resolve initial data and columns
+	const initialData = useMemo(
+		() => resolveComponentData(component.data, pageData, modalData) || [],
+		[component.data, pageData, modalData]
+	);
 	const dslColumns: ColumnDefinition[] = resolveComponentData(component.columns, pageData, modalData) || component.columns;
+
+	// Local state for table data (allows adding rows dynamically)
+	const [localData, setLocalData] = useState<any[]>(initialData);
+
+	// Sync local data when initial data changes
+	useEffect(() => {
+		setLocalData(initialData);
+	}, [initialData]);
+
+	// Listen for add-rows events
+	useEffect(() => {
+		if (!component.id) return;
+
+		const handleAddRows = (e: Event) => {
+			const customEvent = e as CustomEvent<{ targetId: string; rows: any[] }>;
+			if (customEvent.detail.targetId === component.id) {
+				setLocalData(prev => [...prev, ...customEvent.detail.rows]);
+			}
+		};
+
+		window.addEventListener('dsl-add-rows', handleAddRows);
+		return () => window.removeEventListener('dsl-add-rows', handleAddRows);
+	}, [component.id]);
+
+	const data = localData;
 
 	// Map DSL columns to library columns
 	const columns: TableColumn[] = dslColumns.map((col) => ({

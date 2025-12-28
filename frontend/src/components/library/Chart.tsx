@@ -91,6 +91,7 @@ export function Chart({
 								dataKey={s.dataKey}
 								name={s.name}
 								fill={s.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
+								isAnimationActive={false}
 							/>
 						))}
 					</BarChart>
@@ -112,6 +113,7 @@ export function Chart({
 								name={s.name}
 								stroke={s.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
 								strokeWidth={2}
+								isAnimationActive={false}
 							/>
 						))}
 					</LineChart>
@@ -134,6 +136,7 @@ export function Chart({
 								stroke={s.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
 								fill={s.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
 								fillOpacity={0.6}
+								isAnimationActive={false}
 							/>
 						))}
 					</AreaChart>
@@ -152,6 +155,7 @@ export function Chart({
 							cy="50%"
 							outerRadius={height / 3}
 							label
+							isAnimationActive={false}
 						>
 							{data.map((_entry, index) => (
 								<Cell key={`cell-${index}`} fill={series[0]?.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]} />
@@ -176,6 +180,7 @@ export function Chart({
 								name={s.name}
 								data={data}
 								fill={s.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]}
+								isAnimationActive={false}
 							/>
 						))}
 					</ScatterChart>
@@ -194,7 +199,7 @@ export function Chart({
 
 	return (
 		<div className={containerClassName} style={style} data-testid={dataTestId}>
-			<ResponsiveContainer width="100%" height={height}>
+			<ResponsiveContainer width="100%" height={height} debounce={50}>
 				{renderChart()}
 			</ResponsiveContainer>
 		</div>

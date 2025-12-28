@@ -38,7 +38,7 @@ export interface ActionOnError {
 }
 
 export interface ActionDefinition {
-	type: "api-call" | "open-modal" | "close-modal" | "navigate" | "refresh" | "show-toast" | "open-panel" | "close-panel" | "toggle-panel" | "store-data" | "map" | "copy-to-clipboard" | "trigger-dynamic";
+	type: "api-call" | "open-modal" | "close-modal" | "navigate" | "refresh" | "show-toast" | "open-panel" | "close-panel" | "toggle-panel" | "store-data" | "map" | "copy-to-clipboard" | "trigger-dynamic" | "add-rows";
 
 	// API call config
 	endpoint?: string | ValueRef;
@@ -80,6 +80,10 @@ export interface ActionDefinition {
 
 	// Dynamic component trigger
 	triggerId?: string;  // ID of dynamic component to trigger
+
+	// Add rows to table/data component
+	targetId?: string;  // ID of the component to add rows to
+	rows?: any[] | ValueRef;  // Rows/data to add
 }
 
 // Base Component Properties

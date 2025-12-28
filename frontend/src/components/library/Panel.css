@@ -80,29 +80,22 @@
 	max-height: 80vh;
 	display: flex;
 	flex-direction: column;
+	transition: right 0.2s ease-out, left 0.2s ease-out;
 }
 
 .lib-panel-bottom-right {
-	bottom: 1rem;
-	right: 1rem;
 	animation: slideInFromRight 0.2s ease-out;
 }
 
 .lib-panel-bottom-left {
-	bottom: 1rem;
-	left: 1rem;
 	animation: slideInFromLeft 0.2s ease-out;
 }
 
 .lib-panel-top-right {
-	top: 1rem;
-	right: 1rem;
 	animation: slideInFromRight 0.2s ease-out;
 }
 
 .lib-panel-top-left {
-	top: 1rem;
-	left: 1rem;
 	animation: slideInFromLeft 0.2s ease-out;
 }
 
@@ -201,7 +194,7 @@
 	align-items: center;
 	gap: 0.75rem;
 	cursor: pointer;
-	transition: transform 0.2s ease, box-shadow 0.2s ease;
+	transition: transform 0.2s ease, box-shadow 0.2s ease, right 0.2s ease-out, left 0.2s ease-out;
 	max-width: 250px;
 	animation: expandFromCorner 0.2s ease-out;
 }
@@ -211,25 +204,6 @@
 	box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
-.lib-panel-minimized-bottom-right {
-	bottom: 1rem;
-	right: 1rem;
-}
-
-.lib-panel-minimized-bottom-left {
-	bottom: 1rem;
-	left: 1rem;
-}
-
-.lib-panel-minimized-top-right {
-	top: 1rem;
-	right: 1rem;
-}
-
-.lib-panel-minimized-top-left {
-	top: 1rem;
-	left: 1rem;
-}
 
 .lib-panel-minimized-title {
 	font-size: 0.875rem;

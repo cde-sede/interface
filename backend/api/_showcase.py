@@ -305,12 +305,25 @@ def build_data_tab() -> TabsItem:
 				{"id": 3, "name": "Item 3", "status": "completed", "created_at": "2025-01-03"},
 			]
 		)
-			.add_column("id", "ID", type="text", width="80px")
-			.add_column("name", "Name", type="text")
-			.add_column("status", "Status", type="status")
+			.id("test_table")
+			.add_column("id", "ID", type="text", width="80px", sortable=True)
+			.add_column("name", "Name", type="text", sortable=True)
+			.add_column("status", "Status", type="status", sortable=True)
 			.add_column("created_at", "Created", type="date")
 			.build()
 		)
+		.add_component(create_spacer(size="md"))
+		.add_component(
+			create_button("Add row",
+				 action=ActionBuilder()
+				 .add_rows("test_table", rows=ValueRefBuilder.literal([
+					{"id": 4, "name": "Item 4", "status": "active", "created_at": "2025-01-04"},
+					{"id": 5, "name": "Item 5", "status": "pending", "created_at": "2025-01-05"},
+					{"id": 6, "name": "Item 6", "status": "completed", "created_at": "2025-01-06"},
+				]))
+			)
+		)
+
 		.add_component(create_spacer(size="md"))
 		
 		# Chart
@@ -365,7 +378,7 @@ def build_layout_tab() -> TabsItem:
 		# Container
 		.add_component(create_rich_text("## Container"))
 		.add_component(ContainerBuilder(max_width="800px", padding="2rem", centered=True)
-			.add_child(create_rich_text("This content is in a centered container with max-width of 800px"))
+			.add_child(create_rich_text("This content is in a centered container with max-width of 800px", align="center"))
 			.build()
 		)
 		.build()
@@ -413,6 +426,26 @@ def build_feedback_tab() -> TabsItem:
 		.add_component(create_button(
 			label="Open Side Panel",
 			action=ActionBuilder().open_panel("info-panel"),
+			variant="secondary"
+		))
+		.add_component(create_button(
+			label="Open Side Panel",
+			action=ActionBuilder().open_panel("info-panel2"),
+			variant="secondary"
+		))
+		.add_component(create_button(
+			label="Open Side Panel",
+			action=ActionBuilder().open_panel("info-panel3"),
+			variant="secondary"
+		))
+		.add_component(create_button(
+			label="Open Side Panel",
+			action=ActionBuilder().open_panel("info-panel4"),
+			variant="secondary"
+		))
+		.add_component(create_button(
+			label="Open Side Panel",
+			action=ActionBuilder().open_panel("info-panel5"),
 			variant="secondary"
 		))
 		.add_component(create_spacer(size="md"))
@@ -472,5 +505,9 @@ def add_modals_and_panels(page: PageBuilder) -> PageBuilder:
 	)
 	
 	page.add_panel("info-panel", info_panel)
+	page.add_panel("info-panel2", info_panel)
+	page.add_panel("info-panel3", info_panel)
+	page.add_panel("info-panel4", info_panel)
+	page.add_panel("info-panel5", info_panel)
 	
 	return page

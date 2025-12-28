@@ -72,7 +72,7 @@ class ActionOnError(TypedDict, total=False):
 
 class ActionDefinition(TypedDict, total=False):
     """Defines an action (API call, modal, navigation, etc.)"""
-    type: Literal["api-call", "open-modal", "close-modal", "navigate", "refresh", "show-toast", "open-panel", "close-panel", "toggle-panel", "store-data", "map", "copy-to-clipboard", "trigger-dynamic"]
+    type: Literal["api-call", "open-modal", "close-modal", "navigate", "refresh", "show-toast", "open-panel", "close-panel", "toggle-panel", "store-data", "map", "copy-to-clipboard", "trigger-dynamic", "add-rows"]
 
     # API call config
     endpoint: Union[str, ValueRef]
@@ -114,6 +114,10 @@ class ActionDefinition(TypedDict, total=False):
 
     # Dynamic component trigger
     triggerId: str  # ID of dynamic component to trigger
+
+    # Add rows to table/data component
+    targetId: str  # ID of the component to add rows to
+    rows: Union[List[Any], ValueRef]  # Rows/data to add
 
 
 # ============================================================================

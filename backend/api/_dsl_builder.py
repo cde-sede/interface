@@ -392,6 +392,40 @@ class ActionBuilder:
 		self.action["triggerId"] = trigger_id
 		return self
 
+	def add_rows(
+		self,
+		target_id: str,
+		rows: Union[List[Any], ValueRef],
+		success_message: Optional[str] = None
+	) -> Self:
+		"""Configure an add rows action
+
+		Args:
+			target_id: ID of the table/data component to add rows to
+			rows: List of rows/data to add (can be ValueRef)
+			success_message: Optional success message to show
+
+		Examples:
+			# Add static rows
+			ActionBuilder().add_rows("my_table", [
+				{"name": "John", "age": 30},
+				{"name": "Jane", "age": 25}
+			])
+
+			# Add rows from API response
+			ActionBuilder()
+				.api_call("/api/users", "GET")
+				.on_success(action=ActionBuilder().add_rows("my_table", {"$ref": "@response.users"}))
+		"""
+		self.action["type"] = "add-rows"
+		self.action["targetId"] = target_id
+		self.action["rows"] = rows
+		if success_message:
+			self.action["onSuccess"] = {
+				"message": success_message
+			}
+		return self
+
 	def build(self) -> ActionDefinition:
 		"""Build the action definition"""
 		return self.action

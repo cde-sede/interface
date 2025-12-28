@@ -99,6 +99,9 @@ export class ActionEngine {
 		case 'trigger-dynamic':
 			return this.executeTriggerDynamic(action, enrichedContext);
 
+		case 'add-rows':
+			return this.executeAddRows(action, enrichedContext);
+
 			default:
 				console.warn('Unknown action type:', action.type);
 				return Promise.resolve();
@@ -715,6 +718,38 @@ export class ActionEngine {
 
 		// Trigger all dynamic components with this ID
 		triggerDynamicAction(triggerId);
+	}
+
+	/**
+	 * Execute add rows action
+	 */
+	private async executeAddRows(
+		action: ActionDefinition,
+		context: ResolverContext
+	): Promise<void> {
+		const { targetId, rows } = action;
+
+		if (!targetId) {
+			console.error('Add rows action missing targetId');
+			return;
+		}
+
+		// Resolve rows data
+		const resolvedRows = resolveAllValues(rows, context) as any[];
+
+		if (!resolvedRows || !Array.isArray(resolvedRows)) {
+			console.error('Add rows action: rows must be an array');
+			return;
+		}
+
+		// Emit event for the target component to listen to
+		const event = new CustomEvent('dsl-add-rows', {
+			detail: {
+				targetId,
+				rows: resolvedRows
+			}
+		});
+		window.dispatchEvent(event);
 	}
 
 	/**

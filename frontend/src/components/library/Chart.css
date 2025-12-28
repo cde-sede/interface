@@ -7,6 +7,14 @@
 	margin: 1rem 0;
 }
 
+.lib-chart .recharts-wrapper {
+	transition: width 0.15s ease-out, height 0.15s ease-out;
+}
+
+.lib-chart .recharts-surface {
+	transition: width 0.15s ease-out, height 0.15s ease-out;
+}
+
 .lib-chart-error {
 	padding: 2rem;
 	text-align: center;
