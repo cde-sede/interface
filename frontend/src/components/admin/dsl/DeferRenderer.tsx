@@ -31,7 +31,7 @@ const deferCache = new Map<string, CacheEntry>();
 
 // Global registry for action-triggered defer components
 interface DeferTriggerCallback {
-	load: () => void;
+	load: (params?: Record<string, any>) => void;
 }
 
 const deferActionRegistry = new Map<string, Set<DeferTriggerCallback>>();
@@ -62,10 +62,10 @@ export function unregisterDeferAction(actionId: string, callback: DeferTriggerCa
 /**
  * Trigger all defer components registered for an action
  */
-export function triggerDeferAction(actionId: string) {
+export function triggerDeferAction(actionId: string, params?: Record<string, any>) {
 	const callbacks = deferActionRegistry.get(actionId);
 	if (callbacks) {
-		callbacks.forEach(callback => callback.load());
+		callbacks.forEach(callback => callback.load(params));
 	}
 }
 
@@ -84,11 +84,13 @@ export default function DeferRenderer({
 	const [isLoading, setIsLoading] = useState(trigger.type === 'immediate');  // Start loading for immediate triggers
 	const [error, setError] = useState<string | null>(null);
 	const [shouldLoad, setShouldLoad] = useState(trigger.type === 'immediate');
+	const [loadVersion, setLoadVersion] = useState(0);  // Increment to force reload
 
 	// Refs
 	const containerRef = useRef<HTMLDivElement>(null);
 	const observerRef = useRef<IntersectionObserver | null>(null);
 	const hasLoadedRef = useRef(false);
+	const triggerParamsRef = useRef<Record<string, any> | undefined>(undefined);
 
 	/**
 	 * Load deferred content from endpoint
@@ -107,11 +109,15 @@ export default function DeferRenderer({
 		let endpoint = resolveValue(component.endpoint, context) as string;
 		const method = component.method || 'GET';
 
-		// Build query parameters if provided
-		if (component.params) {
-			const resolvedParams = resolveAllValues(component.params, context);
+		// Build query parameters - merge component.params with trigger params
+		const allParams = {
+			...(component.params ? resolveAllValues(component.params, context) : {}),
+			...(triggerParamsRef.current || {})
+		};
+
+		if (Object.keys(allParams).length > 0) {
 			const queryString = new URLSearchParams(
-				Object.entries(resolvedParams).map(([key, value]) => [
+				Object.entries(allParams).map(([key, value]) => [
 					key,
 					String(value ?? '')
 				])
@@ -121,6 +127,9 @@ export default function DeferRenderer({
 				endpoint += (endpoint.includes('?') ? '&' : '?') + queryString;
 			}
 		}
+
+		// Clear trigger params after use
+		triggerParamsRef.current = undefined;
 
 		// Execute onTrigger action if defined
 		if (component.onTrigger && actionEngine) {
@@ -255,7 +264,7 @@ export default function DeferRenderer({
 				loadContent();
 			});
 		}
-	}, [shouldLoad]);
+	}, [shouldLoad, loadVersion]);
 
 	/**
 	 * Setup intersection observer for viewport trigger
@@ -329,20 +338,33 @@ export default function DeferRenderer({
 
 	/**
 	 * Setup action trigger registration
+	 * Registers for action triggers if:
+	 * 1. trigger.type === 'action' with actionId
+	 * 2. OR component has an id (allows any Defer to be re-triggered by its id)
 	 */
 	useEffect(() => {
-		if (trigger.type === 'action' && trigger.actionId) {
+		const actionId = (trigger.type === 'action' && trigger.actionId) ? trigger.actionId : component.id;
+
+		if (actionId) {
 			const callback: DeferTriggerCallback = {
-				load: () => setShouldLoad(true)
+				load: (params?: Record<string, any>) => {
+					// Store trigger params for use in loadContent
+					triggerParamsRef.current = params;
+					// Reset loaded state to allow re-fetching
+					hasLoadedRef.current = false;
+					setContent(null);
+					setShouldLoad(true);
+					setLoadVersion(v => v + 1);  // Force reload even if shouldLoad is already true
+				}
 			};
 
-			registerDeferAction(trigger.actionId, callback);
+			registerDeferAction(actionId, callback);
 
 			return () => {
-				unregisterDeferAction(trigger.actionId!, callback);
+				unregisterDeferAction(actionId, callback);
 			};
 		}
-	}, [trigger.type, trigger.actionId]);
+	}, [trigger.type, trigger.actionId, component.id]);
 
 	// Render loading state
 	if (isLoading && component.loadingState) {

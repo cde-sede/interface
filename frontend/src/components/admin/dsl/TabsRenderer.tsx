@@ -61,7 +61,7 @@ export default function TabsRenderer({ component, pageData, modalData, actionEng
 
 			<div className="dsl-tabs-content">
 				{activeTabData?.content.map((comp, index) => (
-					<div key={index} className="dsl-tab-component">
+					<div key={`${activeTab}-${index}`} className="dsl-tab-component">
 						{actionEngine && renderComponent(comp, pageData, modalData, actionEngine)}
 					</div>
 				))}

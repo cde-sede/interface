@@ -375,7 +375,7 @@ export function Table({
 										</th>
 									);
 								})}
-								{rowActions && rowActions.length > 0 && <th>Actions</th>}
+								{rowActions && rowActions.length > 0 && <th className="lib-table-actions-cell">Actions</th>}
 							</tr>
 						</thead>
 						<tbody>
@@ -401,24 +401,26 @@ export function Table({
 										</td>
 									))}
 									{rowActions && rowActions.length > 0 && (
-										<td>
-											{rowActions.map((action) => {
-												const isDisabled = action.disabled ? action.disabled(row) : false;
-												return (
-													<button
-														key={action.id}
-														className="lib-table-action-button"
-														onClick={(e) => {
-															e.stopPropagation();
-															action.onClick(row);
-														}}
-														disabled={isDisabled}
-														title={action.label}
-													>
-														{action.label}
-													</button>
-												);
-											})}
+										<td className="lib-table-actions-cell">
+											<div className="lib-table-row-actions">
+												{rowActions.map((action) => {
+													const isDisabled = action.disabled ? action.disabled(row) : false;
+													return (
+														<button
+															key={action.id}
+															className="lib-table-action-button"
+															onClick={(e) => {
+																e.stopPropagation();
+																action.onClick(row);
+															}}
+															disabled={isDisabled}
+															title={action.label}
+														>
+															{action.label}
+														</button>
+													);
+												})}
+											</div>
 										</td>
 									)}
 								</tr>

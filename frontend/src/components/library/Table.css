@@ -44,10 +44,43 @@
 	cursor: pointer;
 }
 
-.lib-table th:last-child,
-.lib-table td:last-child {
-	text-align: center;
-	width: 100px;
+/* Row actions cell */
+.lib-table-actions-cell {
+	text-align: right;
+	width: auto;
+	white-space: nowrap;
+}
+
+.lib-table-row-actions {
+	display: inline-flex;
+	gap: 0.375rem;
+	justify-content: flex-end;
+	align-items: center;
+}
+
+.lib-table-row-actions .lib-table-action-button {
+	padding: 0.25rem 0.5rem;
+	font-size: 0.75rem;
+}
+
+/* Compact density row actions */
+.lib-table.lib-table-compact .lib-table-row-actions {
+	gap: 0.25rem;
+}
+
+.lib-table.lib-table-compact .lib-table-row-actions .lib-table-action-button {
+	padding: 0.1875rem 0.375rem;
+	font-size: 0.6875rem;
+}
+
+/* Dense density row actions */
+.lib-table.lib-table-dense .lib-table-row-actions {
+	gap: 0.1875rem;
+}
+
+.lib-table.lib-table-dense .lib-table-row-actions .lib-table-action-button {
+	padding: 0.125rem 0.25rem;
+	font-size: 0.625rem;
 }
 
 /* Density variants */

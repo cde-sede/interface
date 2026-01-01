@@ -7,6 +7,7 @@
 import type { ActionDefinition, RichTextComponent } from './types';
 import { resolveAllValues, type ResolverContext } from './valueResolver';
 import { triggerDynamicAction } from './dynamicRegistry';
+import { triggerDeferAction } from './DeferRenderer';
 
 // Extend Window interface to include datastore
 declare global {
@@ -707,17 +708,21 @@ export class ActionEngine {
 	 */
 	private async executeTriggerDynamic(
 		action: ActionDefinition,
-		_context: ResolverContext
+		context: ResolverContext
 	): Promise<void> {
-		const { triggerId } = action;
+		const { triggerId, params } = action;
 
 		if (!triggerId) {
 			console.error('Trigger dynamic action missing triggerId');
 			return;
 		}
 
-		// Trigger all dynamic components with this ID
+		// Resolve params if provided
+		const resolvedParams = params ? resolveAllValues(params, context) : undefined;
+
+		// Trigger all dynamic and defer components with this ID
 		triggerDynamicAction(triggerId);
+		triggerDeferAction(triggerId, resolvedParams);
 	}
 
 	/**

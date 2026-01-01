@@ -82,6 +82,21 @@ class API(ABCApi):
 			], columns='repeat(auto-fill, minmax(140px, 1fr))'),
 		])
 
+	@register("/table/<string:kind>", methods=["GET"])
+	def get_table(self, kind):
+		if kind == "table":
+			return jsonify([TableBuilder([])
+				.id("data_table")
+				.add_column("id", "ID", type="text", width="80px", sortable=True)
+				.build(),
+				create_defer("/content/table/0", trigger=create_defer_trigger_immediate())
+			])
+		return jsonify([
+			create_defer(f"/content/table/{int(kind) + 1}", trigger=create_defer_trigger_intersection(),
+				on_trigger=ActionBuilder().add_rows("data_table", ValueRefBuilder.literal([{"id": kind}]))
+			)
+		])
+
 	@register("/home", methods=["GET"])
 	@describe("The main app page")
 	def get_home(self):
@@ -90,58 +105,11 @@ class API(ABCApi):
 		).add_section(
 			SectionBuilder()
 			.add_component(create_defer(
-				"/content/grid/infinite",
+				"/content/table/table",
 				trigger=create_defer_trigger_immediate(),
-				loading_state= create_grid(
-					[ SkeletonBuilder("rectangular").build() for i in range(9) ],
-					columns='repeat(auto-fill, minmax(140px, 1fr))'
-				),
-				params={"count": 9 * 2}
 			))
 		).build())
 
-		# return jsonify(PageBuilder(
-		# 	title="", description="",
-		# ).add_section(
-		# 	SectionBuilder()
-		# 	.add_component(
-		# 		FlexBuilder("row", "center")
-		# 		.add_items([
-		# 			create_text_input(
-		# 				name="search",
-		# 				on_change=ActionBuilder().store_data("_search", ValueRefBuilder.field("form", "search")),
-		# 				custom_style={"flex-grow": "0.5", "margin": "auto 0"}
-		# 			),
-		# 			create_spacer("md", "horizontal"),
-		# 			create_button(
-		# 				label="Search",
-		# 				size="medium",
-		# 				action=ActionBuilder().trigger_dynamic("dyn-grid").on_success(
-		# 					action=ActionBuilder().show_toast(ValueRefBuilder.field("store", "_search"), "info")
-		# 				),
-		# 				custom_style={"margin": "0.75rem 0"}
-		# 			),
-		# 		])
-		# 		.build()
-		# 	)
-		# 	.add_component(create_spacer("sm", "horizontal"))
-		# 	.add_component(create_spacer("xl"))
-		# 	.add_component(create_dynamic("dyn-grid",
-		# 		ValueRefBuilder.computed("/content/grid/{query}",
-		# 			query=ValueRefBuilder.urlencode(ValueRefBuilder.coalesce(
-		# 				ValueRefBuilder.field("store", "_search"),
-		# 				ValueRefBuilder.literal("#empty")
-		# 			))
-		# 		)
-		# 	))
-		# 	.add_component(create_defer(
-		# 		"#",
-		# 		trigger=create_defer_trigger_immediate(),
-		# 		on_trigger=ActionBuilder().trigger_dynamic("dyn-grid"))
-		# 	)
-		# ).build())
-
-			
 
 def setup(manager: Manager[ABCApi], /):
 	return API(manager)

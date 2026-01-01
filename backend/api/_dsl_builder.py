@@ -373,15 +373,22 @@ class ActionBuilder:
 			self.on_success(message=success_message)
 		return self
 
-	def trigger_dynamic(self, trigger_id: str) -> Self:
+	def trigger_dynamic(self, trigger_id: str, params: Optional[Dict[str, Any]] = None) -> Self:
 		"""Trigger a dynamic component to reload its content
 
 		Args:
 			trigger_id: ID of the dynamic component to trigger
+			params: Optional params to pass to the component (merged into endpoint query params)
 
 		Examples:
 			# Trigger a dynamic component
 			ActionBuilder().trigger_dynamic("user-list")
+
+			# Trigger with params (e.g., for pagination)
+			ActionBuilder().trigger_dynamic("table-view", params={
+				"page": ValueRefBuilder.field("pagination", "pageNumber"),
+				"pageSize": ValueRefBuilder.field("pagination", "pageSize")
+			})
 
 			# Chain with other actions
 			ActionBuilder()
@@ -390,6 +397,8 @@ class ActionBuilder:
 		"""
 		self.action["type"] = "trigger-dynamic"
 		self.action["triggerId"] = trigger_id
+		if params:
+			self.action["params"] = params
 		return self
 
 	def add_rows(
@@ -932,6 +941,16 @@ class ModalBuilder(BaseComponentBuilder):
 			"variant": variant
 		}
 		self.modal["actions"].append(button)  # type: ignore[index]
+		return self
+
+	def close_on_overlay_click(self, enabled: bool = True) -> Self:
+		"""Set whether clicking the overlay closes the modal"""
+		self.modal["closeOnOverlayClick"] = enabled
+		return self
+
+	def on_close(self, action: ActionBuilder | ActionDefinition) -> Self:
+		"""Set action to execute when modal closes"""
+		self.modal["onClose"] = action.build() if isinstance(action, ActionBuilder) else action
 		return self
 
 	def build(self) -> ModalDefinition:

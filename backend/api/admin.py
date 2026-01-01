@@ -7,6 +7,7 @@ import os
 import traceback
 import logging
 import re
+import ast
 from datetime import datetime, timezone
 
 from ._base_api import ABCApi, describe, register, cond
@@ -27,7 +28,11 @@ from ..services.logs import Service as Logs
 
 from ..plugins.auth import AuthUtils, Plugin as Auth
 from ..plugins.models.tasks import Task
+from ..plugins.models.webhook import Webhook
 from ..plugins.model import Plugin as Models
+
+from ..plugins.models._model import ABCModel
+
 
 
 from ..services._manager import reload_all_services
@@ -53,9 +58,16 @@ class API(ABCApi):
 		self.auth.manager = self.manager.get[Manager[ABCPlugin]]("plugins")
 
 		self._logs = None
+		self._models = None
 
 		self.add_rules(self.bp)
 		self._register_socketio_handlers()
+
+	@property
+	def models(self) -> Models:
+		if self._models is None:
+			self._models = self.manager.get[Models]('plugins.models')
+		return self._models
 
 	@property
 	def isroot(self) -> bool:
@@ -168,7 +180,7 @@ class API(ABCApi):
 					"items": [
 						{"id": "overview", "label": "Overview", "icon": "dashboard"},
 						{"id": "services", "label": "Services", "icon": "server"},
-						{"id": "settings", "label": "Settings", "icon": "settings"}
+						{"id": "settings", "label": "Settings", "icon": "settings"},
 					]
 				},
 				{
@@ -177,7 +189,8 @@ class API(ABCApi):
 					"items": [
 						{"id": "database", "label": "Database", "icon": "database"},
 						{"id": "cache", "label": "Cache", "icon": "cache"},
-						{"id": "tasks", "label": "Tasks", "icon": "tasks"}
+						{"id": "tasks", "label": "Tasks", "icon": "tasks"},
+						{"id": "webhooks", "label": "Webooks", "icon": "webhooks"},
 					]
 				},
 				{
@@ -186,14 +199,14 @@ class API(ABCApi):
 					"items": [
 						{"id": "logs", "label": "Logs", "icon": "logs"},
 						{"id": "metrics", "label": "Metrics", "icon": "chart"},
-						{"id": "api-keys", "label": "API Keys", "icon": "key"}
+						{"id": "api-keys", "label": "API Keys", "icon": "key"},
 					]
 				},
 				{
 					"id": "development",
 					"label": "Development",
 					"items": [
-						{"id": "dsl-showcase", "label": "DSL Showcase", "icon": "zap"}
+						{"id": "dsl-showcase", "label": "DSL Showcase", "icon": "zap"},
 					]
 				}
 			]
@@ -673,174 +686,335 @@ class API(ABCApi):
 		})
 
 	@register("/database", methods=["GET"])
-	@describe("Get database info", "route")
+	@describe("Get database info page", "route")
 	@cond(lambda self, **kwargs: True or self.auth.require_admin())
 	def get_database(self):
+		"""Database admin page with tabs for Tables and Query Stats."""
 		settings = self.manager.get[Settings]("services.settings")
 		db_path = settings.db
-		models_plugin = self.manager.get[Models]("plugins.models")
 
 		file_size = 0
 		if os.path.exists(db_path):
 			file_size = os.path.getsize(db_path)
 
-		# Get all models and their information
+		# Count tables and rows for stats
+		total_tables = len(list(self.models.all()))
+		total_rows = sum(model.get_count() for model in self.models.all())
+
+		page = PageBuilder(title="Database", description="Database management and information")
+
+		# Stats section
+		page.add_section(SectionBuilder("Overview")
+			.add_stats_cards([
+				create_stat_card("Total Tables", total_tables),
+				create_stat_card("Total Rows", total_rows),
+				create_stat_card("File Size", f"{file_size / 1024:.2f} KB"),
+			], columns=3)
+			.add_info_grid([
+				create_info_item("Path", db_path, type="code", copyable=True),
+				create_info_item("Type", "SQLite3"),
+			], columns=2))
+
+		# Tabs for Tables and Query Stats
+		tables_tab = (TabBuilder("tables", "Tables")
+			.add_component(create_defer(
+				id="tables-defer",
+				endpoint="/admin/database/tables",
+				trigger=create_defer_trigger_immediate(),
+				loading_state=create_skeleton(variant="table", rows=5)
+			))
+		)
+
+		queries_tab = (TabBuilder("queries", "Query Stats")
+			.add_component(create_defer(
+				id="queries-defer",
+				endpoint="/admin/database/queries",
+				trigger=create_defer_trigger_immediate(),
+				loading_state=create_skeleton(variant="table", rows=5)
+			))
+		)
+
+		tabs = (TabsBuilder()
+			.add_tab(tables_tab)
+			.add_tab(queries_tab)
+			.default_tab("tables")
+			.variant("underlined")
+			.build()
+		)
+		page.add_section(SectionBuilder().add_component(tabs))
+
+		# Modal for viewing table data
+		page.add_modal("view-table-data",
+			ModalBuilder(
+				title=ValueRefBuilder.computed("Table: {table}", table=ValueRefBuilder.field("data", "table")),
+				size="fullscreen"
+			)
+			.close_on_overlay_click(True)
+			.add_component(create_defer(
+				endpoint=ValueRefBuilder.computed("/admin/database/table/{table}/view", table=ValueRefBuilder.field("data", "table")),
+				trigger=create_defer_trigger_immediate(),
+				loading_state=create_skeleton(variant="table", rows=5),
+				id="table-view-content"
+			))
+			.on_close(ActionBuilder().trigger_dynamic("tables-defer"))
+		)
+
+		# Modal for adding a record
+		page.add_modal("add-record",
+			ModalBuilder(
+				title=ValueRefBuilder.computed("Add Record to {table}", table=ValueRefBuilder.field("data", "table")),
+				size="medium"
+			)
+			.close_on_overlay_click(True)
+			.add_component(create_defer(
+				endpoint=ValueRefBuilder.computed("/admin/database/table/{table}/form", table=ValueRefBuilder.field("data", "table")),
+				trigger=create_defer_trigger_immediate(),
+				loading_state=create_skeleton(variant="text", lines=5)
+			))
+		)
+
+		# Modal for EXPLAIN query
+		page.add_modal("explain-result",
+			ModalBuilder(title="EXPLAIN Query", size="large")
+			.close_on_overlay_click(True)
+			.add_component(create_defer(
+				endpoint="/admin/database/explain",
+				method="POST",
+				trigger=create_defer_trigger_immediate(),
+				body={
+					"query": ValueRefBuilder.field("data", "query"),
+					"params": ValueRefBuilder.field("data", "params")
+				},
+				loading_state=create_skeleton(variant="table", rows=3)
+			))
+		)
+
+		return jsonify(page.build())
+
+	@register("/database/tables", methods=["GET"])
+	@describe("Get tables list component", "route")
+	@cond(lambda self, **kwargs: True or self.auth.require_admin())
+	def get_database_tables(self):
+		"""Returns DSL components for the tables list."""
 		tables_info = []
-		total_rows = 0
-		for model in models_plugin.all():
+		for model in self.models.all():
 			count = model.get_count()
-			total_rows += count
 			column_defs = model.get_column_definitions()
 			tables_info.append({
 				"name": model.name,
 				"rows": count,
 				"columns": len(column_defs),
-				"column_names": [col['key'] for col in column_defs]
 			})
 
-		# Build fully inlined and nested DSL
-		return jsonify(PageBuilder(title="Database", description="Database management and information")
-			.add_section(SectionBuilder("Database Statistics")
-				.add_stats_cards([
-					create_stat_card("Total Tables", len(tables_info)),
-					create_stat_card("Total Rows", total_rows),
-					create_stat_card("File Size", f"{file_size / 1024:.2f} KB"),
-				], columns=3))
-			.add_section(SectionBuilder("Database Information")
-				.add_info_grid([
-					create_info_item("Path", db_path, type="code", copyable=True),
-					create_info_item("Type", "SQLite3"),
-					create_info_item("Page Size", "4096 bytes"),
-				], columns=3))
-			.add_section(SectionBuilder("Database Tables")
-				.add_table(TableBuilder(tables_info)
-					.add_column("name", "Table Name", type="text")
-					.add_column("rows", "Row Count", type="number")
-					.add_column("columns", "Columns", type="number")
-					.set_sortable(True)
-					.set_pagination(enabled=True, page_size=10)
-					.add_row_action(
-						id="view-data",
-						label="View Data",
-						action=ActionBuilder()
-							.api_call(
-								endpoint=ValueRefBuilder.computed("/admin/database/table/{table}", table=ValueRefBuilder.field("row", "name")),
-								method="GET")
-							.on_success(action=ActionBuilder().open_modal("view-table-data", modal_data={
-								"table": ValueRefBuilder.field("row", "name"),
-								"response": ValueRefBuilder.field("response", "self")})))))
-			.add_modal("view-table-data", ModalDefinition(
-				title=ValueRefBuilder.computed("Table: {table}", table=ValueRefBuilder.field("data", "table")),
-				size="fullscreen",
-				closeOnOverlayClick=True,
-				content=[
-					InfoGridComponent(type="info-grid", columns=3, items=[
-						InfoGridItem(label="Table Name", value=ValueRefBuilder.field("data", "table"), type="code"),
-						InfoGridItem(label="Total Rows", value=ValueRefBuilder.field("data", "response.totalRecords"), type="text"),
-						InfoGridItem(label="Current Page", type="text", value=ValueRefBuilder.computed(
-							"{current} / {total}",
-							current=ValueRefBuilder.field("data", "response.currentPage"),
-							total=ValueRefBuilder.field("data", "response.totalPages")))]),
-					DividerComponent(type="divider"),
-					TableComponent(
-						type="table",
-						data=ValueRefBuilder.field("data", "response.tableData"),
-						columns=ValueRefBuilder.field("data", "response.columns"),
-						sortable=True,
-						filterable=True,
-						density="compact",
-						actions=[TableActionDefinition(
-							id="add-record",
-							label="Add Record",
-							position="right",
-							action=ActionBuilder()
-								.api_call(
-									endpoint=ValueRefBuilder.computed("/admin/database/table/{table}/schema", table=ValueRefBuilder.field("data", "table")),
-									method="GET")
-								.on_success(action=ActionBuilder().open_modal("add-record", modal_data={
-									"table": ValueRefBuilder.field("data", "table"),
-									"schema": ValueRefBuilder.field("response", "self")}))
-								.build())],
-						rowActions=[RowActionDefinition(
-							id="delete-record",
-							label="Delete",
-							confirmMessage=ValueRefBuilder.computed("Are you sure you want to delete record {id}?", id=ValueRefBuilder.field("row", "id")),
-							action=ActionBuilder()
-								.api_call(
-									endpoint=ValueRefBuilder.computed("/admin/database/table/{table}/delete/{id}",
-										table=ValueRefBuilder.field("data", "table"),
-										id=ValueRefBuilder.field("row", "id")),
-									method="DELETE")
-								.on_success(
-									message="Record deleted successfully",
-									action=ActionBuilder()
-										.api_call(
-											endpoint=ValueRefBuilder.computed("/admin/database/table/{table}?page={page}&pageSize=10",
-												table=ValueRefBuilder.field("data", "table"),
-												page=ValueRefBuilder.field("data", "response.currentPage")),
-											method="GET")
-										.on_success(action=ActionBuilder().open_modal("view-table-data", modal_data={
-											"table": ValueRefBuilder.field("data", "table"),
-											"response": ValueRefBuilder.field("response", "self")})))
-								.on_error(message="Failed to delete record")
-								.build())],
-						pagination=TablePagination(
-							enabled=True,
-							pageSize=10,
-							mode="server",
-							totalItems=ValueRefBuilder.field("data", "response.totalRecords"),
-							currentPage=ValueRefBuilder.field("data", "response.currentPage"),
-							showPageNumbers=True,
-							maxPageButtons=7,
-							showFirstLast=True,
-							showPrevNext=True,
-							onPageChange=ActionBuilder()
-								.api_call(
-									endpoint=ValueRefBuilder.computed("/admin/database/table/{table}?page={page}&pageSize={pageSize}",
-										table=ValueRefBuilder.field("data", "table"),
-										page=ValueRefBuilder.field("pagination", "pageNumber"),
-										pageSize=ValueRefBuilder.field("pagination", "pageSize")),
-									method="GET")
-								.on_success(action=ActionBuilder().open_modal("view-table-data", modal_data={
-									"table": ValueRefBuilder.field("data", "table"),
-									"response": ValueRefBuilder.field("response", "self")}))
-								.build()))]))
-			.add_modal("add-record", ModalDefinition(
-				title=ValueRefBuilder.computed("Add Record to {table}", table=ValueRefBuilder.field("data", "table")),
-				size="medium",
-				closeOnOverlayClick=True,
-				content=[FormComponent(
-					type="form",
-					fields=ValueRefBuilder.field("data", "schema.fields"),
-					layout="vertical",
-					submitAction=ActionBuilder()
-						.api_call(
-							endpoint=ValueRefBuilder.computed("/admin/database/table/{table}/create", table=ValueRefBuilder.field("data", "table")),
-							method="POST",
-							body=ValueRefBuilder.field("form", "self"))
-						.on_success(
-							message="Record created successfully",
-							action=ActionBuilder()
-								.close_modal("add-record")
-								.on_success(action=ActionBuilder()
-									.api_call(
-										endpoint=ValueRefBuilder.computed("/admin/database/table/{table}?page=1&pageSize=10",
-											table=ValueRefBuilder.field("data", "table")),
-										method="GET")
-									.on_success(action=ActionBuilder().open_modal("view-table-data", modal_data={
-										"table": ValueRefBuilder.field("data", "table"),
-										"response": ValueRefBuilder.field("response", "self")}))))
-						.on_error(message="Failed to create record")
-						.build(),
-					cancelAction=ActionBuilder().close_modal("add-record").build())]))
-			.build())
+		table = TableBuilder(tables_info)
+		table.add_column("name", "Table Name", type="text", sortable=True)
+		table.add_column("rows", "Row Count", type="number", sortable=True)
+		table.add_column("columns", "Columns", type="number", sortable=True)
+		table.set_sortable(True)
+		table.add_row_action(
+			id="view-data",
+			label="View",
+			action=ActionBuilder().open_modal("view-table-data", modal_data={
+				"table": ValueRefBuilder.field("row", "name")
+			})
+		)
+
+		return jsonify([table.build()])
+
+	@register("/database/queries", methods=["GET"])
+	@describe("Get query stats component", "route")
+	@cond(lambda self, **kwargs: True or self.auth.require_admin())
+	def get_database_queries(self):
+		"""Returns DSL components for query statistics."""
+		services_manager = self.manager.get[Manager[ABCService]]("services")
+		db_service = services_manager.get[DB]("db")
+
+		db_metrics = db_service.get_metrics()
+		query_patterns = db_metrics.get('query_patterns', [])
+
+		if not query_patterns:
+			return jsonify([
+				EmptyStateComponent(type="empty-state", message="No query statistics available", description="Execute some queries to see statistics here.")
+			])
+
+		# Format for table
+		queries_data = []
+		for pattern in query_patterns[:50]:  # Limit to top 50
+			query = pattern.get('example_query', '')
+			queries_data.append({
+				"query": query[:100] + "..." if len(query) > 100 else query,
+				"full_query": query,
+				"params": pattern.get('example_params', '()'),
+				"count": pattern.get('count', 0),
+				"avg_time": f"{pattern.get('avg_time', 0) * 1000:.2f}ms",
+				"total_time": f"{pattern.get('total_time', 0) * 1000:.2f}ms",
+				"errors": pattern.get('error_count', 0)
+			})
+
+		table = TableBuilder(queries_data)
+		table.table["density"] = "compact"
+		table.add_column("query", "Query", type="code", sortable=True, truncate=True)
+		table.add_column("count", "Executions", type="number", sortable=True, width="100px")
+		table.add_column("avg_time", "Avg Time", type="text", sortable=True, width="100px")
+		table.add_column("total_time", "Total Time", type="text", sortable=True, width="100px")
+		table.add_column("errors", "Errors", type="number", sortable=True, width="80px")
+		table.add_row_action(
+			id="explain-query",
+			label="EXPLAIN",
+			action=ActionBuilder().open_modal("explain-result", modal_data={
+				"query": ValueRefBuilder.field("row", "full_query"),
+				"params": ValueRefBuilder.field("row", "params")
+			})
+		)
+
+		return jsonify([table.build()])
+
+	@register("/database/table/<table_name>/view", methods=["GET"])
+	@describe("Get table view component with data", "route")
+	@cond(lambda self, **kwargs: True or self.auth.require_admin())
+	def get_table_view(self, table_name: str):
+		"""Returns DSL components for viewing table data."""
+		page = int(request.args.get('page', 1))
+		page_size = int(request.args.get('pageSize', 10))
+		offset = (page - 1) * page_size
+
+		# Find the model
+		model = None
+		for m in self.models.all():
+			if m.name == table_name:
+				model = m
+				break
+
+		if not model:
+			return jsonify([
+				AlertComponent(type="alert", title="Error", message=f"Table '{table_name}' not found", variant="error")
+			]), 404
+
+		table_data = model.get_all(limit=page_size, offset=offset)
+		total_count = model.get_count()
+		columns = model.get_column_definitions()
+		total_pages = (total_count + page_size - 1) // page_size if total_count > 0 else 1
+
+		components = [
+			InfoGridComponent(type="info-grid", columns=3, items=[
+				InfoGridItem(label="Table", value=table_name, type="code"),
+				InfoGridItem(label="Total Rows", value=str(total_count), type="text"),
+				InfoGridItem(label="Page", value=f"{page} / {total_pages}", type="text"),
+			]),
+			DividerComponent(type="divider"),
+		]
+
+		# Build table with actions
+		table = TableBuilder(table_data)
+		for col in columns:
+			table.add_column(col['key'], col.get('label', col['key']), type=col.get('type', 'text'), sortable=col.get('sortable', False), truncate=col.get('truncate', False))
+		table.table["density"] = "compact"
+		table.set_sortable(True)
+
+		# Header action to add record
+		table.add_header_action(
+			id="add-record",
+			label="Add Record",
+			action=ActionBuilder().open_modal("add-record", modal_data={"table": table_name})
+		)
+
+		# Row action to delete
+		table.add_row_action(
+			id="delete-record",
+			label="Delete",
+			confirm_message=ValueRefBuilder.computed("Delete record {id}?", id=ValueRefBuilder.field("row", "id")),
+			action=ActionBuilder()
+				.api_call(
+					endpoint=ValueRefBuilder.computed(f"/admin/database/table/{table_name}/delete/{{id}}", id=ValueRefBuilder.field("row", "id")),
+					method="DELETE"
+				)
+				.on_success(
+					message="Record deleted",
+					action=ActionBuilder().trigger_dynamic("table-view-content")
+				)
+				.on_error(message="Failed to delete record")
+		)
+
+		# Server-side pagination
+		table.set_pagination(
+			enabled=True,
+			page_size=page_size,
+			mode="server",
+			total_items=total_count,
+			current_page=page,
+			on_page_change=ActionBuilder().trigger_dynamic("table-view-content", params={
+				"page": ValueRefBuilder.field("pagination", "pageNumber"),
+				"pageSize": ValueRefBuilder.field("pagination", "pageSize")
+			})
+		)
+
+		components.append(table.build())
+		return jsonify(components)
+
+	@register("/database/table/<table_name>/form", methods=["GET"])
+	@describe("Get add record form component", "route")
+	@cond(lambda self, **kwargs: True or self.auth.require_admin())
+	def get_table_form(self, table_name: str):
+		"""Returns DSL form component for adding a record."""
+		# Find the model
+		model = None
+		for m in self.models.all():
+			if m.name == table_name:
+				model = m
+				break
+
+		if not model:
+			return jsonify([
+				AlertComponent(type="alert", title="Error", message=f"Table '{table_name}' not found", variant="error")
+			]), 404
+
+		# Get column definitions and build form fields
+		columns = model.get_column_definitions()
+		fields = []
+		for col in columns:
+			if col['key'] == 'id':
+				continue  # Skip auto-increment ID
+			field_type = "text"
+			if col.get('type') == 'number':
+				field_type = "number"
+			elif col.get('type') == 'boolean':
+				field_type = "checkbox"
+			fields.append({
+				"name": col['key'],
+				"label": col.get('label', col['key']),
+				"type": field_type,
+				"required": col.get('required', False)
+			})
+
+		form = FormComponent(
+			type="form",
+			fields=fields,
+			layout="vertical",
+			submitAction=ActionBuilder()
+				.api_call(
+					endpoint=f"/admin/database/table/{table_name}/create",
+					method="POST",
+					body=ValueRefBuilder.field("form", "self")
+				)
+				.on_success(
+					message="Record created successfully",
+					action=ActionBuilder().close_modal("add-record").on_success(
+						action=ActionBuilder().trigger_dynamic("table-view-content").on_success(
+							action=ActionBuilder().trigger_dynamic("tables-defer")  # Also refresh tables list row count
+						)
+					)
+				)
+				.on_error(message="Failed to create record")
+				.build(),
+			cancelAction=ActionBuilder().close_modal("add-record").build()
+		)
+
+		return jsonify([form])
 
 	@register("/database/table/<table_name>", methods=["GET"])
 	@describe("Get table data with pagination", "route")
 	@cond(lambda self, **kwargs: True or self.auth.require_admin())
 	def get_table_data(self, table_name: str):
-		models_plugin = self.manager.get[Models]("plugins.models")
-
 		# Get pagination params (1-indexed pages from frontend)
 		page = int(request.args.get('page', 1))
 		page_size = int(request.args.get('pageSize', 10))
@@ -850,7 +1024,7 @@ class API(ABCApi):
 
 		# Find the model by name
 		model = None
-		for m in models_plugin.all():
+		for m in self.models.all():
 			if m.name == table_name:
 				model = m
 				break
@@ -877,11 +1051,9 @@ class API(ABCApi):
 	@describe("Delete a record from a table", "route")
 	@cond(lambda self, **kwargs: True or self.auth.require_admin())
 	def delete_table_record(self, table_name: str, record_id: int):
-		models_plugin = self.manager.get[Models]("plugins.models")
-
 		# Find the model by name
 		model = None
-		for m in models_plugin.all():
+		for m in self.models.all():
 			if m.name == table_name:
 				model = m
 				break
@@ -903,11 +1075,9 @@ class API(ABCApi):
 	@describe("Create a new record in a table", "route")
 	@cond(lambda self, **kwargs: True or self.auth.require_admin())
 	def create_table_record(self, table_name: str):
-		models_plugin = self.manager.get[Models]("plugins.models")
-
 		# Find the model by name
 		model = None
-		for m in models_plugin.all():
+		for m in self.models.all():
 			if m.name == table_name:
 				model = m
 				break
@@ -977,11 +1147,9 @@ class API(ABCApi):
 	@describe("Get the create method schema for a table", "route")
 	@cond(lambda self, **kwargs: True or self.auth.require_admin())
 	def get_table_schema(self, table_name: str):
-		models_plugin = self.manager.get[Models]("plugins.models")
-
 		# Find the model by name
 		model = None
-		for m in models_plugin.all():
+		for m in self.models.all():
 			if m.name == table_name:
 				model = m
 				break
@@ -1072,9 +1240,6 @@ class API(ABCApi):
 
 			if not query:
 				return jsonify({"error": "Query is required"}), 400
-
-			# Parse parameters
-			import ast
 			try:
 				# Handle empty or whitespace-only strings
 				if not params_str or params_str.strip() in ('', '()'):
@@ -1125,7 +1290,13 @@ class API(ABCApi):
 					self.logs.error(f"EXPLAIN failed", service="admin",
 					               query=query, params=params, error=str(e))
 					traceback.print_exception(e)
-					return jsonify({"error": f"Failed to explain query: {str(e)}. Query: {query}, Params: {params}"}), 400
+					return jsonify([
+						AlertComponent(type="alert", title="EXPLAIN Failed", message=f"{str(e)}", variant="error"),
+						InfoGridComponent(type="info-grid", columns=1, items=[
+							InfoGridItem(label="Query", value=query, type="code"),
+							InfoGridItem(label="Params", value=str(params), type="code"),
+						])
+					]), 400
 
 				# Format results as table data
 				explanation = []
@@ -1154,14 +1325,30 @@ class API(ABCApi):
 						"value": str(params)
 					})
 
-			return jsonify({
-				"explanation": explanation,
-				"query": query
-			})
+			# Return DSL components for Defer
+			components = [
+				InfoGridComponent(type="info-grid", columns=1, items=[
+					InfoGridItem(label="Query", value=query, type="code"),
+				]),
+				DividerComponent(type="divider"),
+				TableComponent(
+					type="table",
+					data=explanation,
+					columns=[
+						ColumnDefinition(key="column", label="Type", type="text", sortable=False, width="150px"),
+						ColumnDefinition(key="value", label="Detail", type="text", sortable=False, width="auto")
+					],
+					sortable=False,
+					density="compact"
+				)
+			]
+			return jsonify(components)
 
 		except Exception as e:
 			traceback.print_exc()
-			return jsonify({"error": f"Failed to explain query: {str(e)}"}), 500
+			return jsonify([
+				AlertComponent(type="alert", title="Error", message=f"Failed to explain query: {str(e)}", variant="error")
+			]), 500
 
 	@register("/metrics/save", methods=["POST"])
 	@describe("Save all metrics to disk", "route")
@@ -1805,23 +1992,10 @@ class API(ABCApi):
 					queries_table.add_row_action(
 						id="explain-query",
 						label="EXPLAIN",
-						action=ActionBuilder()
-							.api_call(
-								endpoint="/admin/database/explain",
-								method="POST",
-								body={
-									"query": ValueRefBuilder.field("row", "query"),
-									"params": ValueRefBuilder.field("row", "params")
-								}
-							)
-							.on_success(
-								message="Query explanation generated",
-								action=ActionBuilder().open_modal("explain-result", modal_data={
-									"query": ValueRefBuilder.field("row", "query"),
-									"explanation": ValueRefBuilder.field("response", "explanation")
-								})
-							)
-							.on_error(message="Failed to explain query")
+						action=ActionBuilder().open_modal("explain-result", modal_data={
+							"query": ValueRefBuilder.field("row", "query"),
+							"params": ValueRefBuilder.field("row", "params")
+						})
 					)
 
 					db_section.add_table(queries_table)
@@ -1836,8 +2010,6 @@ class API(ABCApi):
 			model_section = SectionBuilder("Model Operations")
 			try:
 				# Import ABCModel to get metrics
-				from ..plugins.models._model import ABCModel
-
 				model_metrics = ABCModel.get_metrics()
 				total_model_ops = ABCModel.get_total_operations()
 				total_model_errors = ABCModel.get_total_errors()
@@ -1881,24 +2053,19 @@ class API(ABCApi):
 
 			# Add EXPLAIN modal for SQL query analysis
 			page.add_modal("explain-result", ModalDefinition(
-				title=ValueRefBuilder.computed("EXPLAIN: {query}", query=ValueRefBuilder.field("data", "query")),
+				title="EXPLAIN Query",
 				size="large",
 				closeOnOverlayClick=True,
 				content=[
-					InfoGridComponent(type="info-grid", columns=1, items=[
-						InfoGridItem(label="Query", value=ValueRefBuilder.field("data", "query"), type="code"),
-					]),
-					DividerComponent(type="divider"),
-					TableComponent(
-						type="table",
-						data=ValueRefBuilder.field("data", "explanation"),
-						columns=[
-							ColumnDefinition(key="column", label="Column", type="text", sortable=False, width="150px"),
-							ColumnDefinition(key="value", label="Value", type="text", sortable=False, width="auto")
-						],
-						sortable=False,
-						filterable=False,
-						density="compact"
+					create_defer(
+						endpoint="/admin/database/explain",
+						method="POST",
+						trigger=create_defer_trigger_immediate(),
+						body={
+							"query": ValueRefBuilder.field("data", "query"),
+							"params": ValueRefBuilder.field("data", "params")
+						},
+						loading_state=create_skeleton(variant="table", rows=3)
 					)
 				]
 			))
@@ -2264,6 +2431,214 @@ class API(ABCApi):
 		"""Return the comprehensive DSL showcase page"""
 		from ._showcase import build_showcase_page
 		return jsonify(build_showcase_page())
+
+	@register("/webhooks", methods=["GET"])
+	@describe("Get webhooks page")
+	@cond(lambda self, *a, **kw: True or self.auth.require_admin())
+	def get_webhooks(self):
+		hooks = self.models.webhooks.get_all()
+		events = self.models.webhooks.get_registered_events()
+		events_data = [{"event": e} for e in events]
+
+		return jsonify(PageBuilder("Webhooks")
+			.add_section(SectionBuilder("Registered Events")
+				.add_table(TableBuilder(events_data)
+					.add_column("event", "Event", "text")
+					.add_row_action(
+						"fire",
+						"Fire Event",
+						icon="zap",
+						action=ActionBuilder()
+							.api_call("/admin/webhooks/fire-event", method="POST", body={"event": ValueRefBuilder.field("row", "event")})
+							.on_success("Event fired")
+					)
+					.set_empty_state("No events registered", "Use @register_webhook decorator to register events")
+				)
+			)
+			.add_section(SectionBuilder("Webhook Subscriptions")
+				.add_table(TableBuilder(hooks or [])
+					.add_column("id", "ID", "number")
+					.add_column("event", "Event", "text")
+					.add_column("url", "URL", "text")
+					.add_column("enabled", "Enabled", "boolean")
+					.add_column("last_used", "Last Used", "text")
+					.add_column("trigger_count", "Triggers", "number")
+					.add_column("last_error", "Last Error", "text")
+					.add_header_action("add_webhook", "Add Webhook", icon="plus", action=ActionBuilder().open_modal("add-webhook"))
+					.add_row_action(
+						"toggle",
+						"Toggle",
+						icon="toggle-left",
+						action=ActionBuilder()
+							.api_call("/admin/webhooks/toggle", method="POST", body={"id": ValueRefBuilder.field("row", "id")})
+							.on_success("Webhook toggled", ActionBuilder().refresh())
+					)
+					.add_row_action(
+						"test",
+						"Test URL",
+						icon="play",
+						action=ActionBuilder()
+							.api_call("/admin/webhooks/test", method="POST", body={"id": ValueRefBuilder.field("row", "id")})
+							.on_success("Test request sent")
+					)
+					.add_row_action(
+						"delete",
+						"Delete",
+						icon="trash",
+						confirm_message="Are you sure you want to delete this webhook?",
+						action=ActionBuilder()
+							.api_call("/admin/webhooks/delete", method="POST", body={"id": ValueRefBuilder.field("row", "id")})
+							.on_success("Webhook deleted", ActionBuilder().refresh())
+					)
+					.set_empty_state("No webhooks configured", "Add a webhook to receive notifications when events occur")
+				)
+			).add_modal("add-webhook", ModalBuilder("Add a new Webhook")
+				.add_component(FormBuilder(
+					ActionBuilder()
+						.api_call("/admin/webhooks/add", method="POST", body={
+							"event": ValueRefBuilder.field("form", "event"),
+							"url": ValueRefBuilder.field("form", "url"),
+							"headers": ValueRefBuilder.field("form", "headers"),
+							"body": ValueRefBuilder.field("form", "body"),
+							"enabled": ValueRefBuilder.field("form", "enabled")
+						})
+						.on_success("Webhook created", ActionBuilder().close_modal("add-webhook").refresh())
+				)
+					.add_select_field("event", "Event", options=[FormFieldOption(value=event, label=event, description="") for event in events], required=True)
+					.add_field("url", "URL", type="text", required=True, placeholder="https://example.com/webhook")
+					.add_field("headers", "Headers (JSON)", type="textarea", required=False, placeholder='{"Authorization": "Bearer token"}')
+					.add_field("body", "Body Template (JSON)", type="textarea", required=False, placeholder='{"event": "{{event}}", "data": "{{data}}"}')
+					.add_field("enabled", "Enabled", type="checkbox", defaultValue=True)
+					.set_cancel_action(ActionBuilder().close_modal("add-webhook"))
+				.build())
+			).build())
+
+	@register("/webhooks/fire-event", methods=["POST"])
+	@describe("Fire a webhook event", method="POST")
+	@cond(lambda self, *a, **kw: True or self.auth.require_admin())
+	def fire_webhook_event(self):
+		data = request.get_json()
+		event = data.get("event")
+
+		if not event:
+			return jsonify({"error": "Event name is required"}), 400
+
+		from ..plugins.models.webhook import Webhook
+		Webhook.fire(event, {"test": True, "message": "Test event fired from admin panel"})
+
+		return jsonify({"success": True, "message": f"Event '{event}' fired"})
+
+	@register("/webhooks/add", methods=["POST"])
+	@describe("Add a new webhook", method="POST")
+	@cond(lambda self, *a, **kw: True or self.auth.require_admin())
+	def add_webhook(self):
+		data = request.get_json()
+		event = data.get("event")
+		url = data.get("url")
+		headers_str = data.get("headers", "{}")
+		body_str = data.get("body", "{}")
+		enabled = data.get("enabled", True)
+
+		if not event or not url:
+			return jsonify({"error": "Event and URL are required"}), 400
+
+		try:
+			headers = json.loads(headers_str) if headers_str else {}
+		except json.JSONDecodeError:
+			return jsonify({"error": "Invalid JSON in headers"}), 400
+
+		try:
+			body = json.loads(body_str) if body_str else {}
+		except json.JSONDecodeError:
+			return jsonify({"error": "Invalid JSON in body template"}), 400
+
+		webhook_id = self.models.webhooks.create(
+			url=url,
+			event=event,
+			headers=headers,
+			body=body,
+			enabled=enabled
+		)
+
+		return jsonify({"success": True, "id": webhook_id})
+
+	@register("/webhooks/toggle", methods=["POST"])
+	@describe("Toggle webhook enabled state", method="POST")
+	@cond(lambda self, *a, **kw: True or self.auth.require_admin())
+	def toggle_webhook(self):
+		data = request.get_json()
+		webhook_id = data.get("id")
+
+		if not webhook_id:
+			return jsonify({"error": "Webhook ID is required"}), 400
+
+		webhook = self.models.webhooks.get(int(webhook_id))
+		if not webhook:
+			return jsonify({"error": "Webhook not found"}), 404
+
+		new_state = not webhook.get("enabled", True)
+		self.models.webhooks.update(int(webhook_id), enabled=new_state)
+
+		return jsonify({"success": True, "enabled": new_state})
+
+	@register("/webhooks/delete", methods=["POST"])
+	@describe("Delete a webhook", method="POST")
+	@cond(lambda self, *a, **kw: True or self.auth.require_admin())
+	def delete_webhook(self):
+		data = request.get_json()
+		webhook_id = data.get("id")
+
+		if not webhook_id:
+			return jsonify({"error": "Webhook ID is required"}), 400
+
+		deleted = self.models.webhooks.delete(int(webhook_id))
+		if not deleted:
+			return jsonify({"error": "Webhook not found"}), 404
+
+		return jsonify({"success": True})
+
+	@register("/webhooks/test", methods=["POST"])
+	@describe("Test a webhook by sending a test request to its URL", method="POST")
+	@cond(lambda self, *a, **kw: True or self.auth.require_admin())
+	def test_webhook(self):
+		data = request.get_json()
+		webhook_id = data.get("id")
+
+		if not webhook_id:
+			return jsonify({"error": "Webhook ID is required"}), 400
+
+		webhook = self.models.webhooks.get(int(webhook_id))
+		if not webhook:
+			return jsonify({"error": "Webhook not found"}), 404
+
+		# Send test request directly to the webhook URL
+		import requests as http_requests
+		from datetime import datetime, timezone
+
+		test_payload = {
+			"event": webhook["event"],
+			"data": {"test": True, "webhook_id": webhook_id, "message": "Test webhook from admin panel"},
+			"timestamp": datetime.now(timezone.utc).isoformat() + "Z"
+		}
+
+		headers = webhook.get("headers", {})
+		if "Content-Type" not in headers:
+			headers["Content-Type"] = "application/json"
+
+		try:
+			response = http_requests.post(
+				webhook["url"],
+				json=test_payload,
+				headers=headers,
+				timeout=10
+			)
+			return jsonify({
+				"success": True,
+				"status_code": response.status_code,
+				"message": f"Test request sent to {webhook['url']}"
+			})
+		except http_requests.RequestException as e:
+			return jsonify({"error": f"Request failed: {str(e)}"}), 500
 
 	@property
 	def name(self) -> str:

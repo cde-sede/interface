@@ -30,10 +30,18 @@ export default function ModalRenderer({
 	actionEngine,
 	onClose
 }: ModalRendererProps) {
-	const { title: rawTitle, size = 'medium', content, actions, closeOnOverlayClick = true } = modal;
+	const { title: rawTitle, size = 'medium', content, actions, closeOnOverlayClick = true, onClose: onCloseAction } = modal;
 
 	// Resolve title if it's a ValueRef
 	const title = resolveValue(rawTitle, { pageData, data: modalData });
+
+	// Handle close with optional onClose action
+	const handleClose = () => {
+		if (onCloseAction && actionEngine) {
+			actionEngine.execute(onCloseAction, { pageData, data: modalData });
+		}
+		onClose();
+	};
 
 	// Auto-copy key to clipboard if modalData contains a key field
 	useEffect(() => {
@@ -50,7 +58,7 @@ export default function ModalRenderer({
 		<Modal
 			title={title}
 			isOpen={true}
-			onClose={onClose}
+			onClose={handleClose}
 			size={size}
 			closeOnOverlayClick={closeOnOverlayClick}
 		>

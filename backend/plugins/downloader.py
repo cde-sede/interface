@@ -8,6 +8,7 @@ from ._base_plugin import ABCPlugin
 from ._manager import Manager
 from .models import ABCModel, File
 from ..services.tasks import Service as Tasks
+from .models.webhook import register_webhook
 import requests
 
 import time
@@ -20,13 +21,12 @@ class Downloader(ABCPlugin):
 
 		# Register the static method (no closure over self)
 		tasks.register(name="download", timeout=30.0)(self.download_task)
-		tasks.register(name="test", timeout=30.0)(self.test)
 
 	@property
 	def name(self) -> str:
 		return "downloader"
 
-	@staticmethod
+	@register_webhook("downloader.test")
 	def test(*a, **kw):
 		return "Lol"
 
@@ -58,6 +58,8 @@ class Downloader(ABCPlugin):
 		#return dict(headers)
 
 def setup(manager: Manager[ABCPlugin], /):
+	require("model")
+	require("models.webhook")
 	return Downloader(manager)
 
 if TYPE_CHECKING:

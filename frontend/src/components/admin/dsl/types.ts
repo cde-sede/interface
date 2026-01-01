@@ -80,6 +80,7 @@ export interface ActionDefinition {
 
 	// Dynamic component trigger
 	triggerId?: string;  // ID of dynamic component to trigger
+	params?: Record<string, any>;  // Optional params to pass when triggering (e.g., for pagination)
 
 	// Add rows to table/data component
 	targetId?: string;  // ID of the component to add rows to
@@ -1022,6 +1023,7 @@ export interface ModalDefinition {
 	content: ComponentDefinition[];
 	actions?: ButtonComponent[];
 	closeOnOverlayClick?: boolean;
+	onClose?: ActionDefinition;  // Action to execute when modal closes
 }
 
 export interface PanelDefinition {

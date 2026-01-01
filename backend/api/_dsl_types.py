@@ -1108,6 +1108,7 @@ class ModalDefinition(TypedDict, total=False):
     size: Literal["small", "medium", "large", "fullscreen"]
     actions: Union[List[ButtonComponent], ValueRef]
     closeOnOverlayClick: bool
+    onClose: ActionDefinition  # Action to execute when modal closes
 
 
 class PanelDefinition(TypedDict, total=False):

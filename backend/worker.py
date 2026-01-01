@@ -123,9 +123,16 @@ def load_task_function(module_path: str, qualname: str):
     """
     # Handle shortened module names from the plugin manager
     # The manager might store just 'downloader' instead of 'backend.plugins.downloader'
+    # or 'models.webhook' instead of 'backend.plugins.models.webhook'
+    prefixes_to_try = []
+
     if '.' not in module_path:
-        # Try common prefixes
-        for prefix in ['backend.plugins', 'backend.services', 'backend']:
+        prefixes_to_try = ['backend.plugins', 'backend.services', 'backend']
+    elif module_path.startswith('models.'):
+        prefixes_to_try = ['backend.plugins']
+
+    if prefixes_to_try:
+        for prefix in prefixes_to_try:
             try:
                 full_path = f'{prefix}.{module_path}'
                 module = importlib.import_module(full_path)

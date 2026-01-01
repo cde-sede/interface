@@ -5,7 +5,7 @@ if TYPE_CHECKING:
 from collections.abc import Callable
 from ._base_plugin import ABCPlugin
 from ._manager import Manager
-from .models import ABCModel, File, Task, User
+from .models import ABCModel, File, Task, User, Webhook
 
 class Plugin(ABCPlugin):
 	def __init__(self, manager: Manager[ABCPlugin]):
@@ -30,6 +30,10 @@ class Plugin(ABCPlugin):
 	@property
 	def users(self) -> User:
 		return cast(User, self._models['models.users'])
+
+	@property
+	def webhooks(self) -> Webhook:
+		return cast(Webhook, self._models['models.webhook'])
 
 	@property
 	def name(self) -> str:

@@ -10,6 +10,8 @@ if TYPE_CHECKING:
 	from backend.plugins import ABCPlugin
 
 from backend.plugins.models._model import ABCModel
+import json
+
 
 
 class Task(ABCModel):
@@ -93,8 +95,6 @@ class Task(ABCModel):
 		Returns:
 			task_id: Database ID of created task
 		"""
-		import json
-
 		params_json = json.dumps(params) if params else None
 		created_at = time.time()
 
